@@ -1,4 +1,8 @@
-#splitting the interfaces for the network class and the network array class
+### Author: Devin Whitten
+### Date: 1/5/18
+
+### splitting the interfaces for the network class
+### and the network array class
 
 import numpy as np
 import pandas as pd

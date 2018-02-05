@@ -3,7 +3,11 @@ import pandas as pd
 from scipy.stats import norm
 from scipy.optimize import curve_fit, minimize
 
+### Author: Devin Whitten
+### Date: 11/11/17
 
+### This script serves as the interface for all functions associated with the
+### temperature training sets.
 
 def Linear_Scale(input_vector, mean, scale):
     ### centers and scales input_vector according to the mean/scale

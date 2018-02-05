@@ -1,3 +1,9 @@
+### Author: Devin Whitten
+### Date: 1/5/18
+
+### This script serves as the interface for creating training sets
+### from photometric catalogs.
+
 import pandas as pd
 import numpy as np
 ##### Interface for main training set generation procedure
