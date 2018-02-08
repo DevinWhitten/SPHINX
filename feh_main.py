@@ -20,8 +20,8 @@ target = train_fns.Dataset(path=param.params['target_path'], variable='FEH', mod
 
 #### Process target catalog
 target.remove_duplicates()
-target.remove_discrepant_variables()
-
+target.remove_discrepant_variables(threshold=0.2)
+target.SNR_threshold(20)
 target.format_names()
 target.faint_bright_limit()
 target.format_colors()
@@ -42,7 +42,7 @@ span_window()
 target.gen_scale_frame("self")
 
 #### Define training set
-training_FEH.process( scale_frame = target.scale_frame, threshold=0.1, normal_columns=None,
+training_FEH.process( scale_frame = target.scale_frame, threshold=0.08, SNR_limit=40, normal_columns=None,
                       set_bounds = True, bin_number=20, bin_size=200,
                       verbose=True, show_plot=True)
 
@@ -81,11 +81,11 @@ FEH_network.train()
 ##### Part Two: Network Array
 print("... Assemble FEH network array")
 FEH_array = network_array.Network_Array(training_FEH, interp_frame = None, target_variable = "FEH",
-                                      scale_frame = training_FEH.scale_frame, input_type="colors",
-                                      array_size=100)
+                                      scale_frame = training_FEH.scale_frame, input_type="both",
+                                      array_size=50)
 
 FEH_array.set_input_type()
-FEH_array.generate()
+FEH_array.generate(assert_band=["F395"])
 FEH_array.train()
 FEH_array.info()
 FEH_array.eval_performance()

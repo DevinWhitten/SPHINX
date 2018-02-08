@@ -72,7 +72,7 @@ class Network_Array():
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
 
 
-    def train(self, train_fct=0.75):
+    def train(self, train_fct=0.65):
         print("train_array...")
         ### Trains array of networks, sets the verification and target set
         ### iterations: number of networks to train
@@ -114,9 +114,9 @@ class Network_Array():
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
 
         print("Setting network low_mad")
-        [net.set_low_mad(train_fns.MAD(net.residual_low)) for net in self.network_array]
+        [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
-        self.scores = np.divide(1., np.power(np.array([net.get_low_mad() for net in self.network_array]),2))
+        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),2))
 
         return
 
@@ -130,7 +130,7 @@ class Network_Array():
 
         self.output = output
         #return np.dot(output, np.divide(1.,self.MADs))/np.divide(1., TEFF_net.MADs).sum()
-        self.target_err = np.array([train_fns.MAD(np.array(row)) for row in output])
+        self.target_err = np.array([np.std(np.array(row)) for row in output])
 
         self.target_est = (np.dot(output, self.scores)/(self.scores.sum()))
 

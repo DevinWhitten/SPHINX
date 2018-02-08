@@ -185,6 +185,13 @@ class Dataset():
         elif self.variable == "TEFF":
             print("I've not implemented this feature")
 
+    def SNR_threshold(self, SNR_limit = 30):
+        ### Remove sources with SNR below the SNR_limit from self.custom
+        ### This will probably greatly improve training
+        original_length = len(self.custom)
+        self.custom = self.custom[self.custom['SNR'] > SNR_limit]
+        print("Stars removed:  ", original_length - len(self.custom))
+
 
     def format_names(self):
         span_window()
@@ -467,12 +474,13 @@ class Dataset():
         return len(self.custom)
 
 
-    def process(self, scale_frame, threshold, normal_columns=None, set_bounds=False, bin_number=20,
+    def process(self, scale_frame, threshold, SNR_limit=25, normal_columns=None, set_bounds=False, bin_number=20,
                 bin_size =100, verbose=False, show_plot=False):
         #### just run all of the necessary procedures on the training database
         ## normal_columns: columns that subject to force_normal()
         print("... Processing ", self.variable, " training set")
         self.remove_discrepant_variables(threshold)
+        self.SNR_threshold(SNR_limit)
         self.format_names()
         #self.set_scale_frame(scale_frame)
         self.faint_bright_limit()
