@@ -1,25 +1,26 @@
 ###########################################################################
 params = {
 "TMIN" : 5000,
-"TMAX" : 9000,
+"TMAX" : 8500,
 "T_ERR_MAX" : 120.,
 
 "FEH_MAX" : -0.5,
 "FEH_MIN" : -4.0,
-"FEH_ERR_MAX": 0.25,
+"FEH_ERR_MAX": 0.20,
 
 "CFE_MAX" : 0.00,
 
 "mag_err_max" : 0.10,
-"mag_faint_lim" : 20,
+"mag_faint_lim" : 21,
 "mag_bright_lim" : 14,
 
 "target_var": "TEFF_ADOP",
 "format_var": "TEFF",
 
-"target_path" : "/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/Temperature/Datasets/EDR_testing_catalog.csv",
+"target_path" : "/Users/MasterD/Google Drive/JPLUS/Databases/EDR/EDR_DR10_SEGUE.csv",
 "segue_path"  : "/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/data/catalogs/SEGUE_calibrated_catalog.csv",
 "idr_segue_path": "/Users/MasterD/Google Drive/JPLUS/Databases/IDR/IDR_SEGUE_cross.csv",
+"idr_segue_dr10_path": "Datasets/IDR_DR10_SEGUE_minus_EDR.csv",
 "output_directory": "/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/Temperature/output/",
 
 

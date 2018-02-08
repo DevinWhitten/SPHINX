@@ -116,20 +116,29 @@ class Network():
             return self.network.predict(input_frame[list(self.inputs)].values)
 
 
-    def verify(self, verify_set):
+    def compute_residual(self, verify_set, scale_frame):
         ### Intending to use with Network_Array.eval_performance()
         ### sets the residual array from the input verification set
-        output = self.network.predict(verify_set[list(self.inputs)].values)
-        ### still scaled
-        self.residual = output - verify_set[self.target_var]
 
+        output = train_fns.unscale(self.network.predict(verify_set[list(self.inputs)].values), *scale_frame[self.target_var])
+        ### still scaled
+        true_value = train_fns.unscale(verify_set[self.target_var], *scale_frame[self.target_var])
+
+        self.residual = output - true_value
+        self.low_residual = output[true_value < -2.5] - true_value[true_value < -2.5]
 
     def set_mad(self, mad):
         ### sets the median absolute deviation of network performance
         self.mad = mad
 
+    def set_low_mad(self, low_mad):
+        self.low_mad = low_mad
+
     def get_mad(self):
         return self.mad
+
+    def get_low_mad(self):
+        return self.low_mad
 
     def unscale_target_variable(self):
         print("unscale_target_variable")

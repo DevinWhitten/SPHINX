@@ -162,6 +162,8 @@ class Dataset():
         else:
             print("I haven't implemented that set yet.")
 
+        print("Initial Network Size of: ", self.mode, len(self.custom))
+
     ############################################################################
     def remove_duplicates(self):
         #### intended to trim target set of duplicate names.
@@ -172,6 +174,16 @@ class Dataset():
                 del self.custom[name]
             except:
                 pass
+
+    def remove_discrepant_variables(self, threshold):
+        ### Remove stars whose ADOP and BIW estimates differ more than threshold
+        print("remove_discrepant_variables():  ", threshold)
+
+        if self.variable == "FEH":
+            self.custom = self.custom[np.abs(self.custom['FEH_ADOP'] - self.custom['FEH_BIW']) < threshold]
+
+        elif self.variable == "TEFF":
+            print("I've not implemented this feature")
 
 
     def format_names(self):
@@ -208,6 +220,9 @@ class Dataset():
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
             print("Current length after ", band, len(self.custom))
+
+
+
 
     def error_reject(self):
         span_window()
@@ -280,16 +295,21 @@ class Dataset():
 
 
     def force_normal(self, columns, bins=20, verbose=False, show_plot=True):
-        span_window()
-        print("force_normal()")
-        print(self.custom.columns)
         ##### Force a gaussian distribution of the custom set according to input mean and std
         ####   simultaneously maximize the number of stars possible
         ####   default pivot column set to F515 for now.
+        ### Precondition:  Must have self.scale_frame defined
+
+        span_window()
+
+
+        print("force_normal()")
+        #print(self.custom.columns)
         for column in columns:
-            print("Pivot Column:  ", column)
+
+            #print("Pivot Column:  ", column)
             ### remove erroneous
-            print(column, " : prior finite", len(self.custom[column]))
+            #print(column, " : prior finite", len(self.custom[column]))
 
             distro = np.array(self.custom[column][np.isfinite(self.custom[column])])
             hist = np.histogram(distro, bins)
@@ -298,7 +318,7 @@ class Dataset():
             xedges = hist[1]
             xbins = [0.5 * (hist[1][i] + hist[1][i+1]) for i in range(len(hist[1])-1)]
             ybins = hist[0]
-            print("HERE")
+            #print("HERE")
             fixed_mean, fixed_std = self.scale_frame[column].iloc[0], self.scale_frame[column].iloc[1]
             print("Forced Normal mean:  ", fixed_mean)
             print("Forced Normal std:   ", fixed_std)
@@ -363,6 +383,7 @@ class Dataset():
 
         working = self.custom.copy(deep=True)  # I don't want to funk with the original frame
         for band in self.params['format_bands'] + self.colors:
+
             working.loc[:, band] = Linear_Scale(working[band], self.scale_frame[band].iloc[0], self.scale_frame[band].iloc[1])
 
         self.custom = working
@@ -426,36 +447,6 @@ class Dataset():
         return
 
 
-    def process(self, scale_frame, normal_columns=None, set_bounds=False, bin_number=20,
-                bin_size =100, verbose=False, show_plot=False):
-        #### just run all of the necessary procedures on the training database
-        ## normal_columns: columns that subject to force_normal()
-        print("... Processing ", self.variable, " training set")
-        self.format_names()
-        #self.set_scale_frame(scale_frame)
-        self.faint_bright_limit()
-        self.error_reject()
-        self.format_colors()
-        self.set_bounds(set_bounds)
-        #if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
-        #self.outlier_rejection(interp_frame)
-        self.uniform_sample(bin_number = bin_number, size=bin_size)
-        self.gen_scale_frame("self")
-        self.scale_photometry()
-
-        print("MAX TEFF:  ", max(self.custom["TEFF"]))
-        print("MIN TEFF:  ", min(self.custom["TEFF"]))
-
-        print("MAX FEH:  ", max(self.custom["FEH"]))
-        print("MIN FEH:  ", min(self.custom["FEH"]))
-        self.scale_variable()
-        return self.scale_frame
-
-
-
-    def save(self, filename="training.csv"):
-        print("... Saving training set to ", filename)
-        self.custom.to_csv(self.params["output_directory"] + filename, index=False)
 
     #### Mutators
     def set_scale_frame(self, input_frame):
@@ -474,3 +465,49 @@ class Dataset():
 
     def get_length(self):
         return len(self.custom)
+
+
+    def process(self, scale_frame, threshold, normal_columns=None, set_bounds=False, bin_number=20,
+                bin_size =100, verbose=False, show_plot=False):
+        #### just run all of the necessary procedures on the training database
+        ## normal_columns: columns that subject to force_normal()
+        print("... Processing ", self.variable, " training set")
+        self.remove_discrepant_variables(threshold)
+        self.format_names()
+        #self.set_scale_frame(scale_frame)
+        self.faint_bright_limit()
+        self.error_reject()
+        self.format_colors()
+        self.set_bounds(set_bounds)
+
+        ####### SCALE_FRAME section #######
+        if type(scale_frame) == str:  ### We'll have to come back to this
+            self.gen_scale_frame(scale_frame)
+        else:
+            self.set_scale_frame(scale_frame)
+
+
+        if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+        #self.outlier_rejection(interp_frame)
+
+        self.uniform_sample(bin_number = bin_number, size=bin_size)
+
+
+        self.scale_photometry()
+        ###################################
+
+        self.gen_interp_frame("self")
+
+        print("MAX TEFF:  ", max(self.custom["TEFF"]))
+        print("MIN TEFF:  ", min(self.custom["TEFF"]))
+
+        print("MAX FEH:  ", max(self.custom["FEH"]))
+        print("MIN FEH:  ", min(self.custom["FEH"]))
+        self.scale_variable()
+        return
+
+    ############################################################################
+
+    def save(self, filename="training.csv"):
+        print("... Saving training set to ", filename)
+        self.custom.to_csv(self.params["output_directory"] + filename, index=False)
