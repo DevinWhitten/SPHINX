@@ -12,9 +12,15 @@ import multiprocessing
 import param
 import sys, itertools
 
-sys.path.append("/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/Temperature/interface")
+sys.path.append("interface")
 import train_fns, net_functions
-
+def isin(array, target_filter):
+    ### Check array of colors and magnitudes and determine if filter is present
+    for ele in array:
+        if target_filter in ele.split("_"):
+            return True
+        else:
+            return False
 
 class Network_Array():
     ### The goal here is to generate an array of networks corresponding to the
@@ -58,15 +64,17 @@ class Network_Array():
         return
 
 
-    def generate(self, assert_band="ALL"):
+    def generate_inputs(self, assert_band="ALL"):
         ### Assemble the network array according to self.combinations
         print("... Generating", self.target_var,"network array")
+
         if assert_band != "ALL":
-            for element in assert_band:
-                print("... Asserting: ", element)
-                self.combinations = self.combinations[[element in ele for ele in self.combinations]]
+            for band in assert_band:
+                print("... Asserting: ", band)
+                self.combinations = self.combinations[[isin(ele, band) for ele in self.combinations]]
 
         ### shuffle combinations
+
         self.combinations = self.combinations[np.random.permutation(len(self.combinations))]
         print(len(self.combinations), " total input combinations")
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
@@ -116,28 +124,41 @@ class Network_Array():
         print("Setting network low_mad")
         [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
-        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),2))
+        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]) + 0.3*np.array([net.get_low_mad() for net in self.network_array]),3))
 
         return
 
     def prediction(self, target_set):
-        print()
-        print("running array prediction:  ")
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
         ## might as well unscale here as well.
+        ## Checks inputs against the interp_frame, sets flag variable in the target set
+        print()
+        print("running array prediction:  ")
+
         output = np.vstack([train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var]) for net in self.network_array]).T
+        flag = np.vstack([net.is_interpolating(target_frame = target_set.custom, interp_frame = self.interp_frame) for net in self.network_array]).T
 
         self.output = output
+        self.flag = flag
+
         #return np.dot(output, np.divide(1.,self.MADs))/np.divide(1., TEFF_net.MADs).sum()
         self.target_err = np.array([np.std(np.array(row)) for row in output])
 
-        self.target_est = (np.dot(output, self.scores)/(self.scores.sum()))
+        ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
+        flagged_score_array = np.dot(flag, self.scores)
+        flagged_score_array[flagged_score_array == 0] = np.nan
+        self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
 
         ######### DONT NEED TO UNSCALE!!!!!!!!!
-        target_set.custom.loc[:, "NET_" + self.target_var+"_CHECK"] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
+        target_set.custom.loc[:, "NET_" + self.target_var] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err * self.scale_frame[self.target_var].iloc[1]
+
+        target_set.custom.loc[:, "NET_ARRAY_FLAG"] = [row.sum() for row in self.flag]
+        ###
+        #target_set.custom.loc[:, ]
+
 
         return self.target_est, self.target_err
 
@@ -147,6 +168,7 @@ class Network_Array():
         print("Running all networks on target set")
         for net in self.network_array:
             target_set.custom.loc[:, "NET_" + str(net.get_id()) + "_FEH"] = train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var])
+            target_set.custom.loc[:, "NET_" + str(net.get_id()) + "_FLAG"] = net.is_interpolating(target_frame= target_set.custom, interp_frame=self.interp_frame)
 
     def write_training_results(self):
         ### Just run prediction on the verification and testing sets
@@ -162,12 +184,22 @@ class Network_Array():
 
         print("... writing training/verification outputs")
 
-        self.training_set.to_csv(param.params['output_directory'] + self.target_var + "_training_results.csv", index=False)
-        self.verification_set.to_csv(param.params['output_directory'] + self.target_var + "_verification_results.csv", index=False)
+        self.training_set.to_csv(param.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
+        self.verification_set.to_csv(param.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
 
         print("... done.")
 
         return
+
+    def process(self, assert_band, target_set):
+        self.set_input_type()
+        self.generate_inputs(assert_band = assert_band)
+        self.train()
+        self.eval_performance()
+        self.prediction(target_set)
+
+
+
 
 
     def save_state(self):

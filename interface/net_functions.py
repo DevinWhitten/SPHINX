@@ -11,7 +11,7 @@ import param
 import sys
 import itertools
 
-sys.path.append("/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/Temperature/interface")
+sys.path.append("interface")
 import train_fns
 
 def MAD(input_vector):
@@ -45,7 +45,7 @@ def performance(network, Train, Valid, Native, Inputs):
 
 class Network():
     def __init__(self, target_variable, hidden_layer=6, inputs=param.params['format_bands'],
-                 act_fct ="tanh", training_set=None, scale_frame=None, ID=None):
+                 act_fct ="tanh", training_set=None, scale_frame=None, interp_frame =None, ID=None):
 
         self.network = network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
                             solver="adam", tol=1e-9, max_iter=int(2e8), learning_rate="adaptive", early_stopping=False,  random_state=200)
@@ -59,6 +59,8 @@ class Network():
         self.inputs = inputs
 
         self.scale_frame = scale_frame
+
+        self.interp_frame = interp_frame
 
         self.target_var = target_variable #param.params['format_var']
 
@@ -98,22 +100,44 @@ class Network():
         self.target_frame = input_frame
         print("... target frame set")
 
+
+    def is_interpolating(self, target_frame, interp_frame):
+        ### check if the inputs in the target frame are withing interp_frame Bounds
+        ### set flag
+        FLAG = []
+        for i, row in target_frame.iterrows():
+            FLAG.append(False not in [interp_frame[column].iloc[0] < row[column] < interp_frame[column].iloc[1] for column in self.inputs])
+
+        self.FLAG = np.array(FLAG, dtype=int)
+        return self.FLAG
+
+
+
+
     def predict(self, input_frame, interp_frame =None):
         ## Basic prediction procedure, with added function to reject
-        ## estimates whose inputs are external to interp_frame
         #############################################################
 
 
         ### This should be the main function for network prediction
         if input_frame is None: ### == not working for DataFrame comparison
+            ## DEPRECATED
             self.target_frame.loc[:, "NET_" + self.target_var] = self.network.predict(self.target_frame[self.inputs].values)
+
             return self.target_frame
 
         else: ### May I want to run a net input_frame on the same network
             #print("... running network", self.ID, "on target frame")
             print("... running network: " + str(self.ID), sep=" ", end = "\r", flush=True)
             self.prediction = self.network.predict(input_frame[list(self.inputs)].values)
-            return self.network.predict(input_frame[list(self.inputs)].values)
+
+            ### 1 for successful estimate, 0 otherwise
+            #self.prediction_flag = input_frame[list(self.inputs)]
+
+            return self.prediction
+
+
+
 
 
     def compute_residual(self, verify_set, scale_frame):

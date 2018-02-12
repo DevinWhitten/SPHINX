@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 ##### Interface for main training set generation procedure
 import os, sys
-sys.path.append("/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/Temperature/interface")
+sys.path.append("interface")
 import temperature_functions
 import param, itertools
 from scipy.optimize import curve_fit, minimize
@@ -26,64 +26,6 @@ def MAD(input_vector):
 def GAUSS(x, a, b, c):
     return a * np.exp(-(x - b)**2.0 / (2 * c**2))
 
-
-def gen_scaled_catalogs(target, scale_frame, interp_frame, params,
-                 mode="SEGUE"):
-    ### mode: determines training population, {"EDR", "IDR", "SEGUE"}, default="SEGUE"
-    ###       we will at some point need to match SEGUE to IDR for more objects
-    ### Still open question of how best to handle the definition of scale_frame
-    ### for single stars it might be best to define this from the training set,
-    ### whereas for large target set we might define differently.
-    ###
-    print('gen_catalogs()')
-    ############################################################################
-    if   mode == "SEGUE":   ### Read SEGUE in
-        print("mode == SEGUE")
-        Batch = pd.read_csv("/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/data/catalogs/SEGUE_calibrated_catalog.csv")
-
-        filter_names = params["segue_bands"]
-        error_names =  params['segue_sigma']
-
-    elif mode == "EDR":
-        print("mode == EDR")
-        Batch = pd.read_csv("/Users/MasterD/Google Drive/JPLUS/Pipeline2.0/data/catalogs/JPLUS_calibrated_catalog.csv")
-
-        ### ILL COME BACK TO THIS
-        filter_names  = ['gSDSS_0', 'rSDSS_0', 'iSDSS_0', 'J0395_0', 'J0410_0', 'J0430_0', 'J0515_0', 'J0660_0', 'J0861_0']
-        error_names   = ['gSDSS_ERR', 'rSDSS_ERR', 'iSDSS_ERR', 'J0395_ERR', 'J0410_ERR', 'J0430_ERR', 'J0515_ERR', 'J0660_ERR', 'J0861_ERR']
-    else:
-        print("Error. Give me a training batch I can use.")
-        sys.quit()
-    ############################################################################
-
-    print("... Training rejection")
-
-    ### temperature rejection
-
-    Cut = Batch[(Batch['TEFF_ADOP'].between(params['TMIN'], params['TMAX'], inclusive=True)) &
-                (Batch['TEFF_ADOP_ERR'] < params['T_ERR_MAX'])]
-
-    ### photometric rejection
-    print("... faint/bright rejection")
-    for band in filter_names:
-        Cut = Cut[Cut[band].between(params["mag_bright_lim"], params["mag_faint_lim"], inclusive=True)]
-
-    print("... mag error rejection")
-    for band in error_names:
-        Cut = Cut[Cut[band] < params["mag_err_max"]]
-
-    print("Training size after photo rejection: ", len(Cut))
-    ##### Interpolation before sampling
-    ##### We need to approximate the target distributions
-    for i,train_band in enumerate(filter_names):
-        Cut = Cut[Cut[train_band].between(interp_frame[params['format_bands'][i]][0], interp_frame[params['format_bands'][i]][1], inclusive=True)]
-
-    ############################################################################
-    print("Stars in Training:  ", len(Cut))
-
-    Shuffle = Cut.iloc[np.random.permutation(len(Cut))]
-
-    return Shuffle
 
 def write_catalogs(catalog, train_fct, mode="SEGUE"):
     #### Shuffles the catalog, writes out the appropriate fractions
@@ -188,10 +130,17 @@ class Dataset():
     def SNR_threshold(self, SNR_limit = 30):
         ### Remove sources with SNR below the SNR_limit from self.custom
         ### This will probably greatly improve training
+        print("SNR_threshold")
         original_length = len(self.custom)
         self.custom = self.custom[self.custom['SNR'] > SNR_limit]
         print("Stars removed:  ", original_length - len(self.custom))
 
+    def EBV_threshold(self, EBV_limit):
+        ## Remove stars above the EBV limit in param.params
+        print("EBV_threshold")
+        original_length = len(self.custom)
+        self.custom[self.custom['EBV_SFD'] < EBV_limit]
+        print("Stars removed:  ", original_length - len(self.custom))
 
     def format_names(self):
         span_window()
@@ -222,8 +171,7 @@ class Dataset():
         for band in self.params['format_bands']:
             #print(self.custom)
             #print(self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)])
-
-
+            print("minimum in:", band, min(self.custom[band]))
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
             print("Current length after ", band, len(self.custom))
@@ -260,7 +208,13 @@ class Dataset():
             self.custom = self.custom[self.custom["TEFF"].between(self.params['TMIN'], self.params['TMAX'], inclusive=True)]
             self.custom = self.custom[self.custom["FEH"].between(self.params['FEH_MIN'], self.params['FEH_MAX'], inclusive=True)]
 
-    def gen_scale_frame(self, input_frame):
+
+    ### Generators
+    def gen_scale_frame(self, input_frame, method="median"):
+        ### method: "gauss", "median"
+        ### "median" makes use of the fscale and (max - min)/2.0 for center
+        ### "gauss" is what we're used to
+
         span_window()
         print("gen_scale_frame()")
         ### Generate scale_frame from input_frame and inputs
@@ -269,9 +223,20 @@ class Dataset():
         if input_frame == "self":
             input_frame = self.custom
 
-        for band in self.params['format_bands'] + self.colors:
-            popt, pcov = gaussian_sigma(input_frame[band])
-            calibration.loc[:, band] = [popt[1], popt[2]]
+        ########################################################################
+        if method == "gauss":
+            for band in self.params['format_bands'] + self.colors:
+                popt, pcov = gaussian_sigma(input_frame[band])
+                calibration.loc[:, band] = [popt[1], popt[2]]
+
+        elif method == "median":
+            for band in self.params['format_bands'] + self.colors:
+                p_min, p_max = np.percentile(input_frame[band], 5), np.percentile(input_frame[band], 95)
+
+                calibration.loc[:, band] = [(p_min + p_min)/2.0, np.abs(p_max - p_min)]
+
+        else:
+            print("I haven't implemented that scaling method")
 
         self.scale_frame = calibration
         return self.scale_frame
@@ -279,6 +244,7 @@ class Dataset():
 
     def gen_interp_frame(self, input_frame):
         ### Create interpolation frame, likely based on the target set.
+        ### Need to be aware of the state of inputs, whether they are normalized or not
         span_window()
         print("gen_interp_frame()")
         calibration = pd.DataFrame()
@@ -286,8 +252,10 @@ class Dataset():
         if input_frame == "self":
             input_frame = self.custom
 
-        for band in self.params['format_bands']:
-            calibration.loc[:, band] = [np.percentile(input_frame[band], 2), np.percentile(input_frame[band], 98)]
+        for band in self.params['format_bands'] + self.colors:
+            calibration.loc[:, band] = [np.percentile(input_frame[band], 1), np.percentile(input_frame[band], 99)]
+
+        self.interp_frame = calibration
 
         return calibration
 
@@ -395,17 +363,22 @@ class Dataset():
 
         self.custom = working
 
-    def scale_variable(self, mean=None, std=None, variable=None):
+    def scale_variable(self, mean=None, std=None, variable=None, method="median"):
         span_window()
         print("scale_variable()")
         if (mean == None) and (std==None):
-            try:
-                print("scaling", self.variable, "on gaussian")
-                popt, pcov = gaussian_sigma(self.custom[self.variable])
-                self.scale_frame[self.variable] = [popt[1], popt[2]]
-            except:
-                print("scaling", self.variable, "on mean/std")
-                self.scale_frame[self.variable] = [np.mean(self.custom[self.variable]), np.std(self.custom[self.variable])]
+            if method == "gauss":
+                try:
+                    print("scaling", self.variable, "on gaussian")
+                    popt, pcov = gaussian_sigma(self.custom[self.variable])
+                    self.scale_frame[self.variable] = [popt[1], popt[2]]
+                except:
+                    print("scaling", self.variable, "on mean/std")
+                    self.scale_frame[self.variable] = [np.mean(self.custom[self.variable]), np.std(self.custom[self.variable])]
+
+            elif method == "median":
+                p_min, p_max = np.percentile(self.custom[self.variable], 5), np.percentile(self.custom[self.variable], 95)
+                self.scale_frame[self.variable] = [(p_min + p_max)/2.0, np.abs(p_max - p_min)]
 
             #self.scale_frame[self.variable] = [popt[1], popt[2]]
             self.custom.loc[:, self.variable] = Linear_Scale(self.custom[self.variable],
@@ -463,24 +436,37 @@ class Dataset():
         self.interp_frame = input_frame
     ############################################################################
 
-    def get_input_stats(self):
+    def get_input_stats(self, inputs="both"):
         span_window()
         print(self.variable, " input statistics: ")
-        for band in self.params['format_bands'] +  self.colors:
+        if inputs == "magnitudes":
+            input_array = self.params['format_bands']
+
+        elif inputs == "colors":
+            input_array = self.colors
+
+        elif inputs == "both":
+            input_array = self.params['format_bands'] + self.colors
+
+        else:
+            print("Error in input specification")
+
+        for band in input_array:
             popt, pcov = gaussian_sigma(self.custom[band])
-            print('{:>5}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
+            print('{:>9}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
 
     def get_length(self):
         return len(self.custom)
 
 
-    def process(self, scale_frame, threshold, SNR_limit=25, normal_columns=None, set_bounds=False, bin_number=20,
+    def process(self, scale_frame, threshold, SNR_limit=25, EBV_limit = param.params['EBV_MAX'], normal_columns=None, set_bounds=False, bin_number=20,
                 bin_size =100, verbose=False, show_plot=False):
         #### just run all of the necessary procedures on the training database
         ## normal_columns: columns that subject to force_normal()
         print("... Processing ", self.variable, " training set")
         self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
+        self.EBV_threshold(EBV_limit)
         self.format_names()
         #self.set_scale_frame(scale_frame)
         self.faint_bright_limit()
@@ -511,7 +497,7 @@ class Dataset():
 
         print("MAX FEH:  ", max(self.custom["FEH"]))
         print("MIN FEH:  ", min(self.custom["FEH"]))
-        self.scale_variable()
+        self.scale_variable(method="median")
         return
 
     ############################################################################
