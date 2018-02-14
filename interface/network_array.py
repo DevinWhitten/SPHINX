@@ -9,7 +9,7 @@ import pandas as pd
 import pickle, random
 import sklearn.neural_network as sknet
 import multiprocessing
-import param
+import param_IDR as param
 import sys, itertools
 
 sys.path.append("interface")
@@ -121,10 +121,10 @@ class Network_Array():
         print("Setting network mad")
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
 
-        print("Setting network low_mad")
-        [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
+        #print("Setting network low_mad")
+        #[net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
-        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]) + 0.3*np.array([net.get_low_mad() for net in self.network_array]),3))
+        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),3))
 
         return
 
@@ -137,27 +137,30 @@ class Network_Array():
         print("running array prediction:  ")
 
         output = np.vstack([train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var]) for net in self.network_array]).T
+
+        print("... flagging network extrapolations")
         flag = np.vstack([net.is_interpolating(target_frame = target_set.custom, interp_frame = self.interp_frame) for net in self.network_array]).T
 
         self.output = output
         self.flag = flag
 
-        #return np.dot(output, np.divide(1.,self.MADs))/np.divide(1., TEFF_net.MADs).sum()
+
         self.target_err = np.array([np.std(np.array(row)) for row in output])
 
+        print("... masking output matrix with network flags")
         ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
         flagged_score_array = np.dot(flag, self.scores)
         flagged_score_array[flagged_score_array == 0] = np.nan
         self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
 
+        print("... appending columns to target_set")
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err * self.scale_frame[self.target_var].iloc[1]
 
         target_set.custom.loc[:, "NET_ARRAY_FLAG"] = [row.sum() for row in self.flag]
-        ###
-        #target_set.custom.loc[:, ]
+        print("... complete")
 
 
         return self.target_est, self.target_err
@@ -172,8 +175,9 @@ class Network_Array():
 
     def write_training_results(self):
         ### Just run prediction on the verification and testing sets
-
+        print("write_training_results")
         output = np.matrix([train_fns.unscale(net.predict(self.training_set), *self.scale_frame[self.target_var]) for net in self.network_array]).T
+        print(output)
         self.training_set.loc[:, 'NET_' + self.target_var] = (np.dot(output, self.scores)/self.scores.sum()).T
         self.training_set.loc[:, self.target_var] = train_fns.unscale(self.training_set[self.target_var], *self.scale_frame[self.target_var])
 

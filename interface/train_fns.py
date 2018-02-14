@@ -10,7 +10,8 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 import temperature_functions
-import param, itertools
+import param_IDR as param
+import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
@@ -76,6 +77,8 @@ class Dataset():
         ### base set from which we process everything
         print("... Reading database:  ", path)
         self.master = pd.read_csv(path)
+        # generate ID for postprocessing remerge
+        self.master.loc[:, "SPHINX_ID"] = np.arange(0, len(self.master), 1)
 
         self.variable=variable
 
@@ -174,7 +177,7 @@ class Dataset():
             print("minimum in:", band, min(self.custom[band]))
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
-            print("Current length after ", band, len(self.custom))
+            print("Current length after:", band, len(self.custom))
 
 
 
@@ -497,11 +500,20 @@ class Dataset():
 
         print("MAX FEH:  ", max(self.custom["FEH"]))
         print("MIN FEH:  ", min(self.custom["FEH"]))
+
         self.scale_variable(method="median")
         return
 
     ############################################################################
 
-    def save(self, filename="training.csv"):
+    def merge_master(self):
+        ### Precondition: Network estimates are completed on self.custom,
+        ### Postcondition: Merges the network estimates with self.master using SPHINX_ID
+        self.custom = pd.merge(self.master,self.custom[["NET_" + self.variable, "NET_"+self.variable + "_ERR", "NET_ARRAY_FLAG",'SPHINX_ID']], on="SPHINX_ID")
+
+    def save(self, filename=None):
+        if filename == None:
+            filename = param.params['output_filename']
+
         print("... Saving training set to ", filename)
         self.custom.to_csv(self.params["output_directory"] + filename, index=False)

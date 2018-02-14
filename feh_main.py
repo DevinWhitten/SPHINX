@@ -42,9 +42,9 @@ span_window()
 target.gen_scale_frame("self", method="median")
 
 #### Define training set
-training_FEH.process( scale_frame = target.scale_frame, threshold=0.2, SNR_limit=35, normal_columns=None,
-                      set_bounds = True, bin_number=25, bin_size=100,
-                      verbose=True, show_plot=True)
+training_FEH.process(scale_frame = target.scale_frame, threshold=0.2, SNR_limit=35, normal_columns=None,
+                     set_bounds = True, bin_number=25, bin_size=100,
+                     verbose=True, show_plot=True)
 
 
 #### target should be scaled differently for TEFF and FEH...

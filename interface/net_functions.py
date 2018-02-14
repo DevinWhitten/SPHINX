@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import sklearn.neural_network as sknet
-import param
+import param_IDR as param
 import sys
 import itertools
 
@@ -101,28 +101,44 @@ class Network():
         print("... target frame set")
 
 
-    def is_interpolating(self, target_frame, interp_frame):
+    def is_interpolating_OLD(self, target_frame, interp_frame):
         ### check if the inputs in the target frame are withing interp_frame Bounds
         ### set flag
+        ### HUGE bottleneck
         FLAG = []
+        length = len(target_frame)
+
         for i, row in target_frame.iterrows():
             FLAG.append(False not in [interp_frame[column].iloc[0] < row[column] < interp_frame[column].iloc[1] for column in self.inputs])
+
+            print("Percent completed:  " + '%.2f' % (float(i)/float(length)), sep= " ", end="\r", flush=True)
 
         self.FLAG = np.array(FLAG, dtype=int)
         return self.FLAG
 
+    def is_interpolating(self, target_frame, interp_frame):
 
+        ### assume all true
+        current = np.ones(len(target_frame))
+        for column in self.inputs:
+            ## boolean row
+            current = current * target_frame[column].between(interp_frame[column].iloc[0], interp_frame[column].iloc[1])
+
+        self.FLAG = current
+        return self.FLAG
 
 
     def predict(self, input_frame, interp_frame =None):
         ## Basic prediction procedure, with added function to reject
         #############################################################
+        print("net_functions.predict()")
 
 
         ### This should be the main function for network prediction
         if input_frame is None: ### == not working for DataFrame comparison
             ## DEPRECATED
             self.target_frame.loc[:, "NET_" + self.target_var] = self.network.predict(self.target_frame[self.inputs].values)
+            print(self.network.predict(self.target_frame[self.inputs].values))
 
             return self.target_frame
 
@@ -130,7 +146,7 @@ class Network():
             #print("... running network", self.ID, "on target frame")
             print("... running network: " + str(self.ID), sep=" ", end = "\r", flush=True)
             self.prediction = self.network.predict(input_frame[list(self.inputs)].values)
-
+            #print(self.network.predict(input_frame[list(self.inputs)].values))
             ### 1 for successful estimate, 0 otherwise
             #self.prediction_flag = input_frame[list(self.inputs)]
 
