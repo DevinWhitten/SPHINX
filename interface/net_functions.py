@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import sklearn.neural_network as sknet
-import param_IDR as param
+import param_M15 as param
 import sys
 import itertools
 

@@ -10,7 +10,7 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 import temperature_functions
-import param_IDR as param
+import param_M15 as param
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -509,7 +509,8 @@ class Dataset():
     def merge_master(self):
         ### Precondition: Network estimates are completed on self.custom,
         ### Postcondition: Merges the network estimates with self.master using SPHINX_ID
-        self.custom = pd.merge(self.master,self.custom[["NET_" + self.variable, "NET_"+self.variable + "_ERR", "NET_ARRAY_FLAG",'SPHINX_ID']], on="SPHINX_ID")
+        self.custom = pd.merge(self.master,self.custom[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_FLAG",'SPHINX_ID']], on="SPHINX_ID")
+
 
     def save(self, filename=None):
         if filename == None:

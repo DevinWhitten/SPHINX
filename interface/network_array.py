@@ -9,7 +9,7 @@ import pandas as pd
 import pickle, random
 import sklearn.neural_network as sknet
 import multiprocessing
-import param_IDR as param
+import param_M15 as param
 import sys, itertools
 
 sys.path.append("interface")
@@ -146,6 +146,8 @@ class Network_Array():
 
 
         self.target_err = np.array([np.std(np.array(row)) for row in output])
+
+
 
         print("... masking output matrix with network flags")
         ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
