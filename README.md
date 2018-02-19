@@ -1,3 +1,8 @@
+<p align='center'>
+<a href="http://tinypic.com?ref=2j68ln5" target="_blank"><img src="http://i64.tinypic.com/2j68ln5.png" border="0" alt="Image and video hosting by TinyPic"></a>
+</p>
+
+
 # Stellar Photometric INdex Explorer
 ### SPHINX
 ### Author: Devin Whitten
