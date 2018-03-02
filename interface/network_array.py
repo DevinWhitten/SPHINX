@@ -9,7 +9,7 @@ import pandas as pd
 import pickle, random
 import sklearn.neural_network as sknet
 import multiprocessing
-import param_M15 as param
+import param_teff as param
 import sys, itertools
 
 sys.path.append("interface")
@@ -71,7 +71,7 @@ class Network_Array():
         if assert_band != "ALL":
             for band in assert_band:
                 print("... Asserting: ", band)
-                self.combinations = self.combinations[[isin(ele, band) for ele in self.combinations]]
+                self.combinations = self.combinations[np.array([isin(ele, band) for ele in self.combinations])]
 
         ### shuffle combinations
 
@@ -145,9 +145,7 @@ class Network_Array():
         self.flag = flag
 
 
-        self.target_err = np.array([np.std(np.array(row)) for row in output])
-
-
+        self.target_err = np.array([train_fns.MAD(np.array(row)) for row in output])
 
         print("... masking output matrix with network flags")
         ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
@@ -159,9 +157,9 @@ class Network_Array():
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
         ######### DONT NEED TO UNSCALE!!!!!!!!!
-        target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err * self.scale_frame[self.target_var].iloc[1]
+        target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err
 
-        target_set.custom.loc[:, "NET_ARRAY_FLAG"] = [row.sum() for row in self.flag]
+        target_set.custom.loc[:, "NET_ARRAY_"+self.target_var + "_FLAG"] = [row.sum() for row in self.flag]
         print("... complete")
 
 
@@ -172,8 +170,8 @@ class Network_Array():
         ### append values with ID to target frame
         print("Running all networks on target set")
         for net in self.network_array:
-            target_set.custom.loc[:, "NET_" + str(net.get_id()) + "_FEH"] = train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var])
-            target_set.custom.loc[:, "NET_" + str(net.get_id()) + "_FLAG"] = net.is_interpolating(target_frame= target_set.custom, interp_frame=self.interp_frame)
+            target_set.custom.loc[:, "NET_" + str(net.get_id()) +"_"+ self.target_var] = train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var])
+            target_set.custom.loc[:, "NET_" + str(net.get_id()) +"_"+ self.target_var + "_FLAG"] = net.is_interpolating(target_frame= target_set.custom, interp_frame=self.interp_frame)
 
     def write_training_results(self):
         ### Just run prediction on the verification and testing sets

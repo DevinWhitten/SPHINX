@@ -1,7 +1,7 @@
 ###########################################################################
 params = {
-"TMIN" : 5000,
-"TMAX" : 7000,
+"TMIN" : 4500,
+"TMAX" : 8000,
 "T_ERR_MAX" : 120.,
 
 "FEH_MAX" : -0.0,
@@ -16,15 +16,12 @@ params = {
 
 "EBV_MAX": 0.05,
 
-"target_var": "TEFF_ADOP",
-"format_var": "TEFF",
-
-"target_path" : "/Users/MasterD/Google Drive/JPLUS/Databases/EDR/EDR_DR10_SEGUE.csv",
-"segue_path"  : "/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/data/catalogs/SEGUE_calibrated_catalog.csv",
-"idr_segue_path": "Datasets/IDR_SEGUE_SUPPLEMENTED.csv",
-"idr_segue_dr10_path": "Datasets/IDR_DR10_SEGUE_SUPPLEMENTED.csv",
-"output_directory": "output/",
-
+"target_path" : "datasets/IDR_h_native_VMP.csv",
+"segue_path"  : "data/catalogs/SEGUE_calibrated_catalog.csv",
+"idr_segue_path": "datasets/IDR_SEGUE_SUPPLEMENTED.csv",
+"idr_segue_dr10_path": "datasets/IDR_h_SEGUE_VMP.csv",
+"output_directory": "output/IDR_run/",
+'output_filename': "IDR_SEGUE_DR10_h_native_vmp_feh.csv",
 
 "target_bands": ['gSDSS_0',     'rSDSS_0',     'iSDSS_0',     'J0395_0',     'J0410_0',     'J0430_0',     'J0515_0',    'J0660_0',    'J0861_0'],
 "target_sigma": ['gSDSS_sig', 'rSDSS_sig', 'iSDSS_sig', 'J0395_sig', "J0410_sig", 'J0430_sig', 'J0515_sig','J0660_sig','J0861_sig'],

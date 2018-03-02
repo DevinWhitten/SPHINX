@@ -9,8 +9,8 @@ import numpy as np
 ##### Interface for main training set generation procedure
 import os, sys
 sys.path.append("interface")
-import temperature_functions
-import param_M15 as param
+#import temperature_functions
+import param_teff as param
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -469,7 +469,7 @@ class Dataset():
         print("... Processing ", self.variable, " training set")
         self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
-        self.EBV_threshold(EBV_limit)
+        #self.EBV_threshold(EBV_limit)
         self.format_names()
         #self.set_scale_frame(scale_frame)
         self.faint_bright_limit()
@@ -477,17 +477,26 @@ class Dataset():
         self.format_colors()
         self.set_bounds(set_bounds)
 
+        for band in self.custom.columns:
+            print(band)
+
+        #if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
-            self.gen_scale_frame(scale_frame)
+            self.gen_scale_frame("self")
         else:
             self.set_scale_frame(scale_frame)
 
+        self.uniform_sample(bin_number = bin_number, size=bin_size)  ### Probably want to uniform sample before setting scale frame
 
-        if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+
+
+
+
+
         #self.outlier_rejection(interp_frame)
 
-        self.uniform_sample(bin_number = bin_number, size=bin_size)
+
 
 
         self.scale_photometry()
@@ -506,11 +515,21 @@ class Dataset():
 
     ############################################################################
 
-    def merge_master(self):
+    def merge_master(self, array_size=0):
         ### Precondition: Network estimates are completed on self.custom,
         ### Postcondition: Merges the network estimates with self.master using SPHINX_ID
-        self.custom = pd.merge(self.master,self.custom[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_FLAG",'SPHINX_ID']], on="SPHINX_ID")
-
+        #columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']
+        #if which == "all"
+        if array_size != 0:
+            print("merging final parameters")
+            columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']
+            #columns = columns + ["NET_" + str(i) + "_" + self.variable for i in range(array_size)]
+            #columns = columns + ["NET_" + str(i) + "_" + self.variable + "_FLAG" for i in range(array_size)]
+            self.custom = pd.merge(self.master,self.custom[columns], on="SPHINX_ID")
+        else:
+            print("Sorry about the duplicate columns")
+            self.custom = pd.merge(self.master,self.custom, on="SPHINX_ID")
+        #[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']]
 
     def save(self, filename=None):
         if filename == None:

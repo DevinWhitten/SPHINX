@@ -33,22 +33,22 @@ target.format_colors()
 ################################################################################
 ### read training files
 
-training_FEH = train_fns.Dataset(path=param.params['idr_segue_path'], variable="FEH", mode="IDR_SEGUE")
+training_FEH = train_fns.Dataset(path=param.params['segue_path'], variable="FEH", mode="SEGUE")
 
 ################################################################################
 span_window()
 
 ################################################################################
-target.gen_scale_frame("self", method="gauss")
+#target.gen_scale_frame("self", method="gauss")
 
 #### Define training set
-training_FEH.process(scale_frame = target.scale_frame, threshold=0.2, SNR_limit=35, normal_columns=None,
-                     set_bounds = True, bin_number=25, bin_size=100,
+training_FEH.process(scale_frame = "self", threshold=0.20, SNR_limit=40, normal_columns=["gSDSS"],
+                     set_bounds = True, bin_number=10, bin_size=200,
                      verbose=True, show_plot=True)
 
 
 #### target should be scaled differently for TEFF and FEH...
-
+target.set_scale_frame(training_FEH.scale_frame)
 target.scale_photometry()
 
 target.get_input_stats(inputs="colors")
@@ -82,10 +82,18 @@ FEH_array.set_input_type()
 FEH_array.generate_inputs()
 FEH_array.train()
 FEH_array.eval_performance()
-FEH_array.prediction(target)
-FEH_array.write_training_results()
 
-target.merge_master()
+FEH_array.prediction(target)
+FEH_array.predict_all_networks(target)
+
+FEH_array.prediction(training_FEH)
+#FEH_array.predict_all_networks(training_FEH)
+#FEH_array.write_training_results()
+training_FEH.merge_master(array_size=50)
+training_FEH.save("M15_feh_training_results.csv")
+
+target.merge_master(array_size=50)
+print(target.custom.columns)
 target.save()
 
 #### Test prediction column add
