@@ -124,7 +124,7 @@ class Network_Array():
         #print("Setting network low_mad")
         #[net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
-        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),3))
+        self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),2))
 
         return
 
@@ -143,14 +143,19 @@ class Network_Array():
 
         self.output = output
         self.flag = flag
+        nan_flag = np.copy(self.flag)
+        nan_flag[nan_flag == 0] = np.nan
 
-
-        self.target_err = np.array([train_fns.MAD(np.array(row)) for row in output])
+        ##### This is the line
+        self.target_err = np.array([train_fns.MAD_finite(np.array(row)) for row in output*nan_flag])
+        #self.target_err = np.array([train_fns.weighted_error(row, self.scores) for row in output*nan_flag])
 
         print("... masking output matrix with network flags")
         ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
         flagged_score_array = np.dot(flag, self.scores)
         flagged_score_array[flagged_score_array == 0] = np.nan
+
+
         self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
 
         print("... appending columns to target_set")

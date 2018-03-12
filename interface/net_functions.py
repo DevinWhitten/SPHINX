@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import sklearn.neural_network as sknet
-import param_teff as param
+import param as param
 import sys
 import itertools
 
@@ -48,7 +48,7 @@ class Network():
                  act_fct ="tanh", training_set=None, scale_frame=None, interp_frame =None, ID=None):
 
         self.network = network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
-                            solver="sgd", tol=1e-10, max_iter=int(3e8), learning_rate="adaptive", early_stopping=False,  random_state=200)
+                            solver="adam", tol=1e-10, max_iter=int(3e8), learning_rate="adaptive", early_stopping=False,  random_state=200)
 
         self.hidden_layer = hidden_layer
 

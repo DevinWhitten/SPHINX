@@ -10,7 +10,7 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 #import temperature_functions
-import param_teff as param
+import param as param
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -22,7 +22,34 @@ def span_window():
     return
 
 def MAD(input_vector):
+
     return np.median(np.abs(input_vector - np.median(input_vector)))
+
+def MAD_finite(input_vector):
+    ### Special case of MAD where we need to remove np.nans from consideration
+    ### intended especially for the is_interpolating() self.flag in network_array
+    input_vector = input_vector[np.isfinite(input_vector)]
+    return np.median(np.abs(input_vector - np.median(input_vector)))
+
+def weighted_error(input_vector, scores):
+    ### Weight the error estimate by the individual network scores
+    #### len(input_vector) == len(scores) !!
+    ## remove np.nans from is_interpolating() check
+    scores = scores[np.isfinite(input_vector)]
+    input_vector = input_vector[np.isfinite(input_vector)]
+    #####
+
+    ### First weighted average
+    average = np.dot(input_vector, scores)/(scores.sum())
+
+    TOP = np.dot(scores, np.power(input_vector-average, 2))
+    MID = (float(len(scores[scores != 0.0])) - 1.0) * scores.sum()
+    BOT = float(len(scores[scores != 0.0]))
+
+
+    return np.sqrt(TOP/MID/BOT)
+
+
 
 def GAUSS(x, a, b, c):
     return a * np.exp(-(x - b)**2.0 / (2 * c**2))

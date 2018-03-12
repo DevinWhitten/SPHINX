@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-import param_M15 as param
+import param as param
 import sys,os
 ##### This script is a test of the metallicity procedures
 
 sys.path.append("interface")
-import temperature_functions, train_fns, net_functions, network_array
+import train_fns, net_functions, network_array
 from train_fns import span_window
 
 ################################################################################
@@ -76,7 +76,7 @@ print("... Singular network")
 print("... Assemble FEH network array")
 FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.interp_frame, target_variable = "FEH",
                                       scale_frame = training_FEH.scale_frame, input_type="colors",
-                                      array_size=50)
+                                      array_size=25)
 
 FEH_array.set_input_type()
 FEH_array.generate_inputs()
@@ -89,12 +89,12 @@ FEH_array.predict_all_networks(target)
 FEH_array.prediction(training_FEH)
 #FEH_array.predict_all_networks(training_FEH)
 #FEH_array.write_training_results()
-training_FEH.merge_master(array_size=50)
-training_FEH.save("M15_feh_training_results.csv")
+#training_FEH.merge_master(array_size=50)
+#training_FEH.save("M15_feh_training_results.csv")
 
-target.merge_master(array_size=50)
-print(target.custom.columns)
-target.save()
+#target.merge_master(array_size=50)
+#print(target.custom.columns)
+#target.save()
 
 #### Test prediction column add
 

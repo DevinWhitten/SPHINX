@@ -17,7 +17,7 @@ params = {
 "EBV_MAX": 0.05,
 
 "target_path" : "datasets/IDR_h_native_VMP.csv",
-"segue_path"  : "data/catalogs/SEGUE_calibrated_catalog.csv",
+"segue_path"  : "/Users/MasterD/Google Drive/JPLUS/Pipeline3.0/data/catalogs/SEGUE_calibrated_catalog.csv",
 "idr_segue_path": "datasets/IDR_SEGUE_SUPPLEMENTED.csv",
 "idr_segue_dr10_path": "datasets/IDR_h_SEGUE_VMP.csv",
 "output_directory": "output/IDR_run/",
