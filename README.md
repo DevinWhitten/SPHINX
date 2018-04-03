@@ -1,6 +1,6 @@
-<p align='center'>
-<a href="http://tinypic.com?ref=2j68ln5" target="_blank"><img src="http://i64.tinypic.com/2j68ln5.png" border="0" width="200"></a>
-</p>
+
+
+![GitHub Logo](https://github.com/DevinWhitten/SPHINX/blob/master/SPHINX_logo.pdf?raw=true)
 
 
 # Stellar Photometric Index Network Explorer
