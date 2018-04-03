@@ -10,7 +10,7 @@
 
 This script package contains the ``network_array``, and ``network`` and ``Dataset`` classes, as well as a main driver for use of network training and parameter estimation with J-PLUS photometry.
 
-SPHINX optimizes an array of networks for estimates of stellar surface temperature and metallicity from photometry of the Javalambre Photometric Local Universe Survey[^fn1].
+SPHINX optimizes an array of networks for estimates of stellar surface temperature and metallicity from photometry of the Javalambre Photometric Local Universe Survey[1].
 
 
-[^fn1]: http://j-plus.es/
+[1] http://j-plus.es/
