@@ -1,4 +1,6 @@
-![](SPHINX_logo.pdf)
+
+
+![GitHub Logo](https://github.com/images/logo.png)
 
 
 # Stellar Photometric Index Network Explorer
