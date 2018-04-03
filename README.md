@@ -1,4 +1,4 @@
-![](SPHINX_logo.pdf?raw=true)
+![](SPHINX_logo.pdf)
 
 
 # Stellar Photometric Index Network Explorer
