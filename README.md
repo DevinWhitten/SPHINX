@@ -17,7 +17,7 @@ SPHINX optimizes an array of networks for estimates of stellar surface temperatu
 
 ![SPHINX Design](https://github.com/DevinWhitten/SPHINX/blob/master/images/SPHINX_Design_2.png)
 
-![SPHINX_Logo](https://github.com/DevinWhitten/SPHINX/blob/master/images/SPHINX_outline.png?raw=true)
+![SPHINX_Logo](https://github.com/DevinWhitten/SPHINX/blob/master/images/SphINX_outline.png)
 
 
 
