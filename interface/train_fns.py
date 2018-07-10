@@ -10,7 +10,7 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 #import temperature_functions
-import param as param
+import param_teff as param
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -103,7 +103,13 @@ class Dataset():
         ### variable: "TEFF" or "FEH" dictates the behavior of training
         ### base set from which we process everything
         print("... Reading database:  ", path)
-        self.master = pd.read_csv(path)
+        ### Might(should) be compressed
+        try:
+            self.master = pd.read_csv(path)
+        except:
+            print("... catalog was compressed.")
+            self.master = pd.read_csv(path, compression="gzip")
+
         # generate ID for postprocessing remerge
         self.master.loc[:, "SPHINX_ID"] = np.arange(0, len(self.master), 1)
 
@@ -127,6 +133,9 @@ class Dataset():
 
         elif mode == "IDR_SEGUE":
             self.error_bands = params['idr_segue_sigma']
+
+        elif mode == "EDR_SEGUE":
+            self.error_bands = params['edr_segue_sigma']
 
         elif mode == 'TARGET':  ### For use of Dataset with the target list
             self.error_bands = params['target_sigma']
@@ -187,7 +196,14 @@ class Dataset():
             self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
             self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
 
+        elif self.mode == "EDR_SEGUE":
+            self.custom.rename(columns=dict(zip(self.params['edr_segue_bands'], self.params['format_bands'])), inplace=True)
+            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
+            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
+
         elif self.mode == "TARGET": ### For use of Dataset with the target list
+            print("Replacing:  ", self.params['target_bands'])
+            print("With:       ", self.params['format_bands'])
             self.custom.rename(columns=dict(zip(self.params['target_bands'], self.params['format_bands'])), inplace=True)
 
         else:
@@ -507,23 +523,19 @@ class Dataset():
         for band in self.custom.columns:
             print(band)
 
-        #if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
             self.gen_scale_frame("self")
         else:
             self.set_scale_frame(scale_frame)
 
+        if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+
         self.uniform_sample(bin_number = bin_number, size=bin_size)  ### Probably want to uniform sample before setting scale frame
 
 
-
-
-
-
         #self.outlier_rejection(interp_frame)
-
-
 
 
         self.scale_photometry()
@@ -559,6 +571,7 @@ class Dataset():
         #[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']]
 
     def save(self, filename=None):
+        print("FILENAME:  ", filename)
         if filename == None:
             filename = param.params['output_filename']
 

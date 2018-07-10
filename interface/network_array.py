@@ -8,8 +8,10 @@ import numpy as np
 import pandas as pd
 import pickle, random
 import sklearn.neural_network as sknet
+from matplotlib.backends.backend_pdf import PdfPages
 import multiprocessing
-import param_teff as param
+import matplotlib.pyplot as plt
+#import param_IDR as param
 import sys, itertools
 
 sys.path.append("interface")
@@ -25,8 +27,9 @@ def isin(array, target_filter):
 class Network_Array():
     ### The goal here is to generate an array of networks corresponding to the
     ### combinations of possible network inputs, enables averaging,
-
-    def __init__(self, training_set, interp_frame, target_variable, scale_frame, input_type="both", input_number=6, array_size=50):
+    '''
+    def __init__(self, training_set, interp_frame, target_variable,
+                 scale_frame, param_file, input_type="both", input_number=8, array_size=50):
 
 
 
@@ -35,9 +38,27 @@ class Network_Array():
         self.target_var = target_variable
         self.array_size = array_size
         self.scale_frame = scale_frame
+        self.params = param_file.params
+
         self.input_type=input_type
         self.input_number = input_number
 
+    '''
+
+    def __init__(self, training_set, interp_frame, target_variable,
+                 scale_frame, param_file, input_type="both", input_number=8, array_size=50):
+
+
+        self.params = param_file.params
+        self.training_set = training_set
+        self.interp_frame = interp_frame
+        self.scale_frame = scale_frame
+        self.target_var = target_variable
+        self.array_size = array_size
+        self.input_number = input_number
+
+        self.input_type=input_type
+        self.input_number = input_number
 
 
     def set_input_type(self):
@@ -45,10 +66,10 @@ class Network_Array():
         print("Network input_type:  ", self.input_type)
 
         if self.input_type == "both":
-            self.inputs = param.params['format_bands'] + self.training_set.colors
+            self.inputs = self.params['format_bands'] + self.training_set.colors
 
         elif self.input_type == "magnitudes":
-            self.inputs = param.params['format_bands']
+            self.inputs = self.params['format_bands']
 
         elif self.input_type == "colors":
             self.inputs = self.training_set.colors
@@ -80,23 +101,62 @@ class Network_Array():
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
 
 
-    def train(self, train_fct=0.65):
-        print("train_array...")
+    def train(self, train_fct=0.65, iterations=3):
+        print("... training array")
         ### Trains array of networks, sets the verification and target set
         ### iterations: number of networks to train
+
 
         self.verification_set = self.training_set.custom.iloc[int(len(self.training_set.custom)*train_fct):].copy()
         self.training_set = self.training_set.custom.iloc[0:int(len(self.training_set.custom)*train_fct)].copy()
 
 
+        for i in range(iterations):
+            print("... iterating training procedure:  ", i)
 
-        [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
+
+
+            [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
+
+            ###### Adding the outlier rejection here
+            ### no score information yet
+            output = np.matrix([net.predict(self.training_set) for net in self.network_array]).T
+
+            #print(output)
+
+            self.training_set.loc[:, 'NET_' + self.target_var] = [np.average(output[i, :]) for i in range(output.shape[0])]
+            #self.training_set.loc[:, self.target_var] = train_fns.unscale(self.training_set[self.target_var], *self.scale_frame[self.target_var])
+
+
+            output = np.matrix([net.predict(self.verification_set) for net in self.network_array]).T
+
+            self.verification_set.loc[:, 'NET_' + self.target_var] = [np.average(output[i, :]) for i in range(output.shape[0])] #(np.dot(output, self.scores)/self.scores.sum()).T
+            #self.verification_set.loc[:, self.target_var] = train_fns.unscale(self.verification_set[self.target_var], *self.scale_frame[self.target_var])
+
+            ### compute residual
+
+            self.training_residual = self.training_set['NET_' + self.target_var] - self.training_set[self.target_var]
+            self.verification_residual = self.verification_set['NET_' + self.target_var] - self.verification_set[self.target_var]
+
+            ### trim the training set
+
+            print("trimming training set by residual")
+            original = len(self.training_residual)
+
+            self.training_set = self.training_set[abs(self.training_residual) < np.percentile(abs(self.training_residual), 98)]
+            self.training_residual = self.training_residual[abs(self.training_residual) < np.percentile(abs(self.training_residual), 98)]
+
+            print("Stars removed:   ", original - len(self.training_set))
+
+        return
+
+
 
     def train_test(self, net):
         net[1].train_on(self.training_set, net[0])
         return
 
-    def train_pool(self, train_fct=0.75, iterations=50, core_fraction=0.5):
+    def train_pool(self, train_fct=0.70, iterations=50, core_fraction=0.5):
         ### Let's try to multiprocess the network_array training
         ### I'll come back to this
         print("train_pool")
@@ -118,21 +178,27 @@ class Network_Array():
         [net.compute_residual(verify_set = self.verification_set, scale_frame = self.scale_frame) for net in self.network_array]
         #thing = self.network_array[0].predict(input_frame = self.verification_set)
         #print(self.network_array[2].residual* self.scale_frame[self.target_var].iloc[1])
+
+
         print("Setting network mad")
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
+        [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
         #print("Setting network low_mad")
         #[net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
+        total_mad = np.array([net.get_mad() for net in self.network_array]) + np.array([net.get_low_mad() for net in self.network_array])
 
         self.scores = np.divide(1., np.power(np.array([net.get_mad() for net in self.network_array]),2))
 
         return
 
     def prediction(self, target_set):
+
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
-        ## might as well unscale here as well.
-        ## Checks inputs against the interp_frame, sets flag variable in the target set
+        ### might as well unscale here as well.
+        ### Checks inputs against the interp_frame, sets flag variable in the target set
+
         print()
         print("running array prediction:  ")
 
@@ -147,7 +213,7 @@ class Network_Array():
         nan_flag[nan_flag == 0] = np.nan
 
         ##### This is the line
-        self.target_err = np.array([train_fns.MAD_finite(np.array(row)) for row in output*nan_flag])
+        self.target_err = np.array([train_fns.MAD_finite(np.array(row))/0.6745 for row in output*nan_flag])
         #self.target_err = np.array([train_fns.weighted_error(row, self.scores) for row in output*nan_flag])
 
         print("... masking output matrix with network flags")
@@ -159,16 +225,19 @@ class Network_Array():
         self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
 
         print("... appending columns to target_set")
+
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
+
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err
 
         target_set.custom.loc[:, "NET_ARRAY_"+self.target_var + "_FLAG"] = [row.sum() for row in self.flag]
         print("... complete")
 
-
         return self.target_est, self.target_err
+
+
 
     def predict_all_networks(self, target_set):
         ### Run each network in the array on the target_set
@@ -193,12 +262,37 @@ class Network_Array():
 
         print("... writing training/verification outputs")
 
-        self.training_set.to_csv(param.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
-        self.verification_set.to_csv(param.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
+        self.training_set.to_csv(self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
+        self.verification_set.to_csv(self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
 
         print("... done.")
 
         return
+
+
+    def training_plots(self):
+        ### show the training results in one-to-one residual plots
+        span = np.linspace(min(self.verification_set[self.target_var]), max(self.verification_set[self.target_var]), 30)
+        pp = PdfPages(self.params["output_directory"] + self.target_var + "_plot.pdf")
+        fig, ax = plt.subplots(2,1)
+
+        ax[0].scatter(self.verification_set[self.target_var], self.verification_set['NET_' + self.target_var],
+                      s=1, label="Verification", alpha=0.65)
+        ax[0].scatter(self.training_set[self.target_var], self.training_set['NET_' + self.target_var],
+                      s=1, color="black",label="Training", alpha=0.65)
+
+        ax[1].scatter(self.verification_set[self.target_var],
+                      self.verification_set['NET_' + self.target_var] - self.verification_set[self.target_var],
+                      s=1, alpha=0.65)
+        ax[1].scatter(self.training_set[self.target_var],
+                      self.training_set['NET_' + self.target_var] - self.training_set[self.target_var],
+                      s=1, color="black", alpha=0.65)
+
+        ax[0].plot(span, span, linestyle="--", color="black", alpha=0.75)
+        ax[1].plot(span, np.zeros(30), linestyle="--", color="black", alpha=0.75)
+        pp.savefig()
+        pp.close()
+
 
     def process(self, assert_band, target_set):
         self.set_input_type()

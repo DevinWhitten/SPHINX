@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import sklearn.neural_network as sknet
-import param as param
+#import param_IDR as param
 import sys
 import itertools
 
@@ -44,11 +44,11 @@ def performance(network, Train, Valid, Native, Inputs):
 ### optimization technique would be important too.
 
 class Network():
-    def __init__(self, target_variable, hidden_layer=6, inputs=param.params['format_bands'],
-                 act_fct ="tanh", training_set=None, scale_frame=None, interp_frame =None, ID=None):
+    def __init__(self, target_variable, inputs, hidden_layer=(8,4),
+                 act_fct ="tanh", solver = "sgd", training_set=None, scale_frame=None, interp_frame =None, ID=None):
 
-        self.network = network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
-                            solver="adam", tol=1e-10, max_iter=int(3e8), learning_rate="adaptive", early_stopping=False,  random_state=200)
+
+        self.solver = solver
 
         self.hidden_layer = hidden_layer
 
@@ -66,7 +66,11 @@ class Network():
 
         self.ID = ID
 
-    def train(self, train_fct=0.85):
+        self.network = network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
+                            solver=self.solver, tol=1e-9, max_iter=int(1e8), learning_rate="adaptive",
+                            early_stopping=False,  random_state=200)
+
+    def train(self, train_fct=0.75):
         ### Precondition: network must have been instantiated
         ### train:
         ### test:
@@ -214,19 +218,19 @@ class Network():
         print("Verification Residual: ", train_fns.gaussian_sigma(self.verification_residual)[0])
 
 
-    def write_estimates(self):
+    def write_estimates(self, output_dir):
         ## This is the tentative function to write all network predictions of the training, validation, and target sets
         print("... writing estimates")
-        self.training_set.to_csv(param.params['output_directory']+self.target_var + "_training_result.csv", index=False)
-        self.verification_set.to_csv(param.params['output_directory']+self.target_var + "_verification_result.csv", index=False)
-        self.target_frame.to_csv(param.params['output_directory']+self.target_var + "_target_result.csv", index=False)
+        self.training_set.to_csv(output_dir+self.target_var + "_training_result.csv", index=False)
+        self.verification_set.to_csv(output_dir+self.target_var + "_verification_result.csv", index=False)
+        self.target_frame.to_csv(output_dir+self.target_var + "_target_result.csv", index=False)
 
 
 
-    def save(self):
+    def save(self, location):
         print("Finish")
-        intercept_out = open(self.params['output_directory'] + self.target_var + "_net_intercepts.pkl", "wb")
-        coefs_out =     open(self.params['output_directory'] + self.target_var + "_net_coefs.pkl", "wb")
+        intercept_out = open(location + self.target_var + "_net_intercepts.pkl", "wb")
+        coefs_out =     open(location + self.target_var + "_net_coefs.pkl", "wb")
 
         pickle.dump(self.network.intercepts_, intercept_out)
         pickle.dump(self.network.coefs_,      coefs_out)
@@ -235,11 +239,11 @@ class Network():
         coefs_out.close()
 
 
-    def load(self):
+    def load(self, location):
         ### There needs to be a check to ensure the same archeticture is being loaded.
         ### I'll do that eventually
-        intercept_in = open(self.params['output_directory'] + "net_intercepts.pkl", "r")
-        coefs_in     = open(self.params['output_directory'] + "net_coefs.pkl", "r")
+        intercept_in = open(location + "net_intercepts.pkl", "r")
+        coefs_in     = open(location + "net_coefs.pkl", "r")
 
         self.Network.intercepts_ = pickle.load(intercept_in)
         self.Network.coefs_      = pickle.load(coefs_in)

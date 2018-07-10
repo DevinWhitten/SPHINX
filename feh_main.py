@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import param as param
+import param_IDR as param
 import sys,os
 ##### This script is a test of the metallicity procedures
 
@@ -33,7 +33,7 @@ target.format_colors()
 ################################################################################
 ### read training files
 
-training_FEH = train_fns.Dataset(path=param.params['segue_path'], variable="FEH", mode="SEGUE")
+training_FEH = train_fns.Dataset(path=param.params['idr_segue_sup_path'], variable="FEH", mode="IDR_SEGUE")
 
 ################################################################################
 span_window()
@@ -43,7 +43,7 @@ span_window()
 
 #### Define training set
 training_FEH.process(scale_frame = "self", threshold=0.20, SNR_limit=40, normal_columns=["gSDSS"],
-                     set_bounds = True, bin_number=10, bin_size=200,
+                     set_bounds = True, bin_number=25, bin_size=150,
                      verbose=True, show_plot=True)
 
 
@@ -74,27 +74,24 @@ print("... Singular network")
 
 ##### Part Two: Network Array
 print("... Assemble FEH network array")
-FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.interp_frame, target_variable = "FEH",
-                                      scale_frame = training_FEH.scale_frame, input_type="colors",
-                                      array_size=25)
+FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.interp_frame,
+                                        target_variable = "FEH", scale_frame = training_FEH.scale_frame,
+                                        param_file = param,
+                                        input_type="colors", array_size=25)
 
 FEH_array.set_input_type()
-FEH_array.generate_inputs()
+FEH_array.generate_inputs(assert_band=["F395"])  #assert_band=["F395"]
 FEH_array.train()
 FEH_array.eval_performance()
 
 FEH_array.prediction(target)
 FEH_array.predict_all_networks(target)
+FEH_array.write_training_results()
+FEH_array.training_plots()
 
-FEH_array.prediction(training_FEH)
-#FEH_array.predict_all_networks(training_FEH)
-#FEH_array.write_training_results()
-#training_FEH.merge_master(array_size=50)
-#training_FEH.save("M15_feh_training_results.csv")
-
-#target.merge_master(array_size=50)
+target.merge_master(array_size=25)
 #print(target.custom.columns)
-#target.save()
+target.save()
 
 #### Test prediction column add
 
