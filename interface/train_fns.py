@@ -10,7 +10,11 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 #import temperature_functions
+<<<<<<< HEAD
 #import param_teff as param
+=======
+import param_teff as param
+>>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -527,6 +531,10 @@ class Dataset():
             #print(band)
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
             self.gen_scale_frame("self")

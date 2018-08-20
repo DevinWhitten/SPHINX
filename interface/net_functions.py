@@ -44,7 +44,11 @@ def performance(network, Train, Valid, Native, Inputs):
 ### optimization technique would be important too.
 
 class Network():
+<<<<<<< HEAD
     def __init__(self, target_variable, inputs, hidden_layer=8,
+=======
+    def __init__(self, target_variable, inputs, hidden_layer=(8,4),
+>>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
                  act_fct ="tanh", solver = "sgd", training_set=None, scale_frame=None, interp_frame =None, ID=None):
 
 
