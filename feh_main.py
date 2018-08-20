@@ -36,11 +36,7 @@ target.scale_photometry()
 ################################################################################
 ### read training files
 
-<<<<<<< HEAD
 training_FEH = train_fns.Dataset(path=param.params['idr_segue_path'], variable="FEH", params=param.params, mode="IDR_SEGUE")
-=======
-training_FEH = train_fns.Dataset(path=param.params['idr_segue_sup_path'], variable="FEH", mode="IDR_SEGUE")
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
 
 ################################################################################
 span_window()
@@ -49,14 +45,9 @@ span_window()
 #target.gen_scale_frame("self", method="gauss")
 
 #### Define training set
-<<<<<<< HEAD
 #scale_frame='self'
 training_FEH.process(scale_frame = target.scale_frame, threshold=0.20, SNR_limit=30, normal_columns=None,
                      set_bounds = True, bin_number=25, bin_size=200,
-=======
-training_FEH.process(scale_frame = "self", threshold=0.20, SNR_limit=40, normal_columns=["gSDSS"],
-                     set_bounds = True, bin_number=25, bin_size=150,
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
                      verbose=True, show_plot=True)
 
 
@@ -88,7 +79,6 @@ print("... Singular network")
 ##### Part Two: Network Array
 print("... Assemble FEH network array")
 FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.interp_frame,
-<<<<<<< HEAD
                                         target_variable = "FEH", scale_frame = target.scale_frame,
                                         param_file = param,
                                         input_type="colors", input_number = 6, array_size=param.params['array_size'])
@@ -98,32 +88,15 @@ FEH_array.set_input_type()
 
 FEH_array.generate_inputs(assert_band=['F395'], assert_colors=['gSDSS_rSDSS'], reject_colors=['F395_F410', 'F410_F430'])
 FEH_array.train(iterations=1)
-=======
-                                        target_variable = "FEH", scale_frame = training_FEH.scale_frame,
-                                        param_file = param,
-                                        input_type="colors", array_size=25)
-
-FEH_array.set_input_type()
-FEH_array.generate_inputs(assert_band=["F395"])  #assert_band=["F395"]
-FEH_array.train()
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
 FEH_array.eval_performance()
 FEH_array.write_network_performance()
 
 FEH_array.prediction(target)
-<<<<<<< HEAD
 #FEH_array.predict_all_networks(target)
 FEH_array.write_training_results()
 #FEH_array.training_plots()
 
 target.merge_master(array_size=param.params['array_size'])
-=======
-FEH_array.predict_all_networks(target)
-FEH_array.write_training_results()
-FEH_array.training_plots()
-
-target.merge_master(array_size=25)
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
 #print(target.custom.columns)
 target.save()
 

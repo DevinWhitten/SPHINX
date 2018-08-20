@@ -152,7 +152,6 @@ class Network_Array():
 
             [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
 
-<<<<<<< HEAD
 
             #################################################################################
             # Let's try to parallelize here
@@ -165,8 +164,6 @@ class Network_Array():
             #################################################################################
 
 
-=======
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
             ###### Adding the outlier rejection here
             ### no score information yet
             output = np.matrix([net.predict(self.training_set) for net in self.network_array]).T
@@ -232,14 +229,8 @@ class Network_Array():
         #print(self.network_array[2].residual* self.scale_frame[self.target_var].iloc[1])
 
 
-<<<<<<< HEAD
-=======
-        print("Setting network mad")
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
-        [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
 
-<<<<<<< HEAD
         if self.target_var == 'FEH':
             print("FEH:  setting low_mad in network score")
             [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
@@ -281,11 +272,6 @@ class Network_Array():
 
         else:
             print("Can't handle ", self.target_var, " in write_network_performance")
-=======
-        #print("Setting network low_mad")
-        #[net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
-        total_mad = np.array([net.get_mad() for net in self.network_array]) + np.array([net.get_low_mad() for net in self.network_array])
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
 
         print("... writing")
         #pd.DataFrame(network_residual).to_csv("cache/" + filename, index=False)
@@ -374,10 +360,7 @@ class Network_Array():
 
 
     def training_plots(self):
-<<<<<<< HEAD
         print("... Generating training plots")
-=======
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         ### show the training results in one-to-one residual plots
         span = np.linspace(min(self.verification_set[self.target_var]), max(self.verification_set[self.target_var]), 30)
         pp = PdfPages(self.params["output_directory"] + self.target_var + "_plot.pdf")
@@ -388,10 +371,7 @@ class Network_Array():
         ax[0].scatter(self.training_set[self.target_var], self.training_set['NET_' + self.target_var],
                       s=1, color="black",label="Training", alpha=0.65)
 
-<<<<<<< HEAD
 
-=======
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         ax[1].scatter(self.verification_set[self.target_var],
                       self.verification_set['NET_' + self.target_var] - self.verification_set[self.target_var],
                       s=1, alpha=0.65)
@@ -401,20 +381,13 @@ class Network_Array():
 
         ax[0].plot(span, span, linestyle="--", color="black", alpha=0.75)
         ax[1].plot(span, np.zeros(30), linestyle="--", color="black", alpha=0.75)
-<<<<<<< HEAD
 
         ax[0].legend()
-=======
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         pp.savefig()
         pp.close()
 
 
-<<<<<<< HEAD
     def process(self, assert_band, assert_colors, reject_colors, target_set):
-=======
-    def process(self, assert_band, target_set):
->>>>>>> a6bfedaab117c2c7dde9a92df69b1d223336e21b
         self.set_input_type()
         self.generate_inputs(assert_band = assert_band, assert_colors = assert_colors, reject_colors=reject_colors)
         self.train()
