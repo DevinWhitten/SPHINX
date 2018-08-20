@@ -1,6 +1,7 @@
 
 
-![GitHub Logo](https://github.com/DevinWhitten/SPHINX/blob/master/images/SPHINX_logo_v3.png?raw=true)
+![GitHub_Logo](https://github.com/DevinWhitten/SPHINX/blob/master/images/SPHINX_logo_v3.png?raw=true)
+
 
 # Stellar Photometric Index Network Explorer
 ### SPHINX
@@ -15,5 +16,8 @@ SPHINX optimizes an array of networks for estimates of stellar surface temperatu
 [1] http://j-plus.es/
 
 ![SPHINX Design](https://github.com/DevinWhitten/SPHINX/blob/master/images/SPHINX_Design_2.png)
+
+![SPHINX_Logo](https://github.com/DevinWhitten/SPHINX/blob/master/images/SphINX_outline.png)
+
 
 

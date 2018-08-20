@@ -10,7 +10,7 @@ import numpy as np
 import os, sys
 sys.path.append("interface")
 #import temperature_functions
-import param as param
+#import param_teff as param
 import itertools
 from scipy.optimize import curve_fit, minimize
 from scipy.interpolate import interp1d
@@ -97,13 +97,19 @@ def unscale(input_vector, mean, scale):
 class Dataset():
     ### Trying to solve the problem of overcomplicating the main.py with training functions
 
-    def __init__(self,path, variable, mode="SEGUE", params = param.params,
+    def __init__(self,path, variable, params, mode="SEGUE",
                 scale_frame=pd.DataFrame(), interp_frame=pd.DataFrame()):
         ### path should be set from param file
         ### variable: "TEFF" or "FEH" dictates the behavior of training
         ### base set from which we process everything
         print("... Reading database:  ", path)
-        self.master = pd.read_csv(path)
+        ### Might(should) be compressed
+        try:
+            self.master = pd.read_csv(path)
+        except:
+            print("... catalog was compressed.")
+            self.master = pd.read_csv(path, compression="gzip")
+
         # generate ID for postprocessing remerge
         self.master.loc[:, "SPHINX_ID"] = np.arange(0, len(self.master), 1)
 
@@ -128,6 +134,9 @@ class Dataset():
         elif mode == "IDR_SEGUE":
             self.error_bands = params['idr_segue_sigma']
 
+        elif mode == "EDR_SEGUE":
+            self.error_bands = params['edr_segue_sigma']
+
         elif mode == 'TARGET':  ### For use of Dataset with the target list
             self.error_bands = params['target_sigma']
 
@@ -140,9 +149,10 @@ class Dataset():
     def remove_duplicates(self):
         #### intended to trim target set of duplicate names.
         #### should be run before format names
-        for name in param.params['format_bands']:
+        print("... remove_duplicates()")
+        for name in self.params['format_bands']:
             try:
-                print(name, "deleted")
+                print("\t", name, "deleted")
                 del self.custom[name]
             except:
                 pass
@@ -187,7 +197,14 @@ class Dataset():
             self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
             self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
 
+        elif self.mode == "EDR_SEGUE":
+            self.custom.rename(columns=dict(zip(self.params['edr_segue_bands'], self.params['format_bands'])), inplace=True)
+            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
+            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
+
         elif self.mode == "TARGET": ### For use of Dataset with the target list
+            print("Replacing:  ", self.params['target_bands'])
+            print("With:       ", self.params['format_bands'])
             self.custom.rename(columns=dict(zip(self.params['target_bands'], self.params['format_bands'])), inplace=True)
 
         else:
@@ -197,14 +214,14 @@ class Dataset():
     def faint_bright_limit(self):
         span_window()
         print("faint_bright_limit()")
-
+        print("custom columns:     ", self.custom.columns)
         for band in self.params['format_bands']:
             #print(self.custom)
             #print(self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)])
-            print("minimum in:", band, min(self.custom[band]))
+            print("\t minimum in:", band, min(self.custom[band]))
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
-            print("Current length after:", band, len(self.custom))
+            print("\t Current length after:", band, len(self.custom))
 
 
 
@@ -226,7 +243,7 @@ class Dataset():
     def format_colors(self):
         ### generate color combinations corresponding to each of the params['format_bands']
         print("format_colors()")
-        color_combinations = list(itertools.combinations(param.params['format_bands'], 2))
+        color_combinations = list(itertools.combinations(self.params['format_bands'], 2))
         self.colors = []
         for each in color_combinations:
             self.custom.loc[:, each[0] + "_" + each[1]] = self.custom[each[0]] - self.custom[each[1]]
@@ -234,19 +251,21 @@ class Dataset():
         return
 
     def set_bounds(self, run=False):
+        print("...set_bounds()")
+
         if run == True:
             self.custom = self.custom[self.custom["TEFF"].between(self.params['TMIN'], self.params['TMAX'], inclusive=True)]
             self.custom = self.custom[self.custom["FEH"].between(self.params['FEH_MIN'], self.params['FEH_MAX'], inclusive=True)]
 
 
     ### Generators
-    def gen_scale_frame(self, input_frame, method="median"):
+    def gen_scale_frame(self, input_frame, method="gauss"):
         ### method: "gauss", "median"
         ### "median" makes use of the fscale and (max - min)/2.0 for center
         ### "gauss" is what we're used to
 
         span_window()
-        print("gen_scale_frame()")
+        print("...gen_scale_frame()")
         ### Generate scale_frame from input_frame and inputs
         calibration = pd.DataFrame()
 
@@ -276,7 +295,7 @@ class Dataset():
         ### Create interpolation frame, likely based on the target set.
         ### Need to be aware of the state of inputs, whether they are normalized or not
         span_window()
-        print("gen_interp_frame()")
+        print("...gen_interp_frame()")
         calibration = pd.DataFrame()
 
         if input_frame == "self":
@@ -381,7 +400,7 @@ class Dataset():
 
     def scale_photometry(self):
         span_window()
-        print("scale_photometry()")
+        print("...scale_photometry()")
 
         #### Precondition: We need self.scale_frame to be set
         ### performs scaling from inputs defined in params.format_bands
@@ -395,7 +414,7 @@ class Dataset():
 
     def scale_variable(self, mean=None, std=None, variable=None, method="median"):
         span_window()
-        print("scale_variable()")
+        print("...scale_variable()")
         if (mean == None) and (std==None):
             if method == "gauss":
                 try:
@@ -418,8 +437,8 @@ class Dataset():
         else:
             print("I have not implemented this yet")
 
-        print(self.variable, " mean: ", self.scale_frame[self.variable].iloc[0])
-        print(self.variable, " std:  ", self.scale_frame[self.variable].iloc[1])
+        print("\t", self.variable, " mean: ", self.scale_frame[self.variable].iloc[0])
+        print("\t", self.variable, " std:  ", self.scale_frame[self.variable].iloc[1])
         return
 
     def unscale_frame(self):
@@ -483,20 +502,20 @@ class Dataset():
 
         for band in input_array:
             popt, pcov = gaussian_sigma(self.custom[band])
-            print('{:>9}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
+            print("\t", '{:>9}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
 
     def get_length(self):
         return len(self.custom)
 
 
-    def process(self, scale_frame, threshold, SNR_limit=25, EBV_limit = param.params['EBV_MAX'], normal_columns=None, set_bounds=False, bin_number=20,
+    def process(self, scale_frame, threshold, SNR_limit=25, EBV_limit = None, normal_columns=None, set_bounds=False, bin_number=20,
                 bin_size =100, verbose=False, show_plot=False):
         #### just run all of the necessary procedures on the training database
         ## normal_columns: columns that subject to force_normal()
         print("... Processing ", self.variable, " training set")
         self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
-        #self.EBV_threshold(EBV_limit)
+        #self.EBV_threshold(self.params['EBV_MAX']) if EBV_limit==None else self.EBV_threshold(EBV_limit)
         self.format_names()
         #self.set_scale_frame(scale_frame)
         self.faint_bright_limit()
@@ -504,26 +523,22 @@ class Dataset():
         self.format_colors()
         self.set_bounds(set_bounds)
 
-        for band in self.custom.columns:
-            print(band)
+        #for band in self.custom.columns:
+            #print(band)
 
-        #if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
             self.gen_scale_frame("self")
         else:
             self.set_scale_frame(scale_frame)
 
+        if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
+
         self.uniform_sample(bin_number = bin_number, size=bin_size)  ### Probably want to uniform sample before setting scale frame
 
 
-
-
-
-
         #self.outlier_rejection(interp_frame)
-
-
 
 
         self.scale_photometry()
@@ -531,11 +546,11 @@ class Dataset():
 
         self.gen_interp_frame("self")
 
-        print("MAX TEFF:  ", max(self.custom["TEFF"]))
-        print("MIN TEFF:  ", min(self.custom["TEFF"]))
+        print("\t MAX TEFF:  ", max(self.custom["TEFF"]))
+        print("\t MIN TEFF:  ", min(self.custom["TEFF"]))
 
-        print("MAX FEH:  ", max(self.custom["FEH"]))
-        print("MIN FEH:  ", min(self.custom["FEH"]))
+        print("\t MAX FEH:  ", max(self.custom["FEH"]))
+        print("\t MIN FEH:  ", min(self.custom["FEH"]))
 
         self.scale_variable(method="median")
         return
@@ -549,7 +564,7 @@ class Dataset():
         #if which == "all"
         if array_size != 0:
             print("merging final parameters")
-            columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']
+            columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID'] + self.colors
             #columns = columns + ["NET_" + str(i) + "_" + self.variable for i in range(array_size)]
             #columns = columns + ["NET_" + str(i) + "_" + self.variable + "_FLAG" for i in range(array_size)]
             self.custom = pd.merge(self.master,self.custom[columns], on="SPHINX_ID")
@@ -559,8 +574,9 @@ class Dataset():
         #[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']]
 
     def save(self, filename=None):
+        print("FILENAME:  ", filename)
         if filename == None:
-            filename = param.params['output_filename']
+            filename = self.params['output_filename']
 
         print("... Saving training set to ", filename)
         self.custom.to_csv(self.params["output_directory"] + filename, index=False)
