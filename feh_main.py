@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import param_IDR as param
+import param_P0 as param
 import sys,os
 ##### This script is a test of the metallicity procedures
 
@@ -16,27 +16,38 @@ print("  Main_v2.0.py  ")
 ### read target file
 print("Target set:  ", param.params['target_path'])
 
-target = train_fns.Dataset(path=param.params['target_path'], variable='FEH', params=param.params, mode="TARGET")
+target = train_fns.Dataset(path=param.params['target_path'], variable='FEH',
+                           params=param.params, mode="TARGET")
 
 #### Process target catalog
+print("1:  ", len(target.custom))
 target.remove_duplicates()
 #target.remove_discrepant_variables(threshold=0.15)
 #target.SNR_threshold(20)
+
+print("2:  ", len(target.custom))
 target.format_names()
-target.faint_bright_limit()
+
+#target.faint_bright_limit()
+print("3:  ", len(target.custom))
+
+#target.error_reject()
 target.format_colors()
+
 #target.set_bounds(run=True)
 ## Need to know how many low-metallicity stars make it to network
-print('[Fe/H] < -2.5 in target:   ',target.custom[target.custom['FEH_BIW'] < -2.5].shape)
+#print('[Fe/H] < -2.5 in target:   ', target.custom[target.custom['FEH_BIW'] < -2.5].shape)
+#print('[Fe/H] < -3.0 in target:   ', target.custom[target.custom['FEH_BIW'] < -3.0].shape)
 
-target.gen_scale_frame("self")
-target.scale_photometry()
-
+#target.gen_scale_frame("self")
+#target.scale_photometry()
+#target.get_input_stats(inputs='colors')
 
 ################################################################################
 ### read training files
 
-training_FEH = train_fns.Dataset(path=param.params['idr_segue_path'], variable="FEH", params=param.params, mode="IDR_SEGUE")
+training_FEH = train_fns.Dataset(path=param.params['segue_path'], variable="FEH",
+                                 params=param.params, mode="SEGUE")
 
 ################################################################################
 span_window()
@@ -46,14 +57,16 @@ span_window()
 
 #### Define training set
 #scale_frame='self'
-training_FEH.process(scale_frame = target.scale_frame, threshold=0.20, SNR_limit=30, normal_columns=None,
+training_FEH.process(scale_frame = param.params['scale_frame'], threshold=0.20,
+                     SNR_limit=30, normal_columns=None,
                      set_bounds = True, bin_number=25, bin_size=200,
                      verbose=True, show_plot=True)
 
 
 #### target should be scaled differently for TEFF and FEH...
-#target.set_scale_frame(training_FEH.scale_frame)
-#target.scale_photometry()
+#print("Scaling target frame--------------------")
+target.set_scale_frame(training_FEH.scale_frame)
+target.scale_photometry()
 
 target.get_input_stats(inputs="colors")
 
@@ -83,15 +96,16 @@ FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.
                                         param_file = param,
                                         input_type="colors", input_number = 6, array_size=param.params['array_size'])
 
-FEH_array.set_input_type()
-#FEH_array.generate_inputs(assert_band=['F395'], assert_colors=['gSDSS_rSDSS'], reject_colors=['F395_F410','F410_F430'])  #assert_band=["F395"]
 
-FEH_array.generate_inputs(assert_band=['F395'], assert_colors=['gSDSS_rSDSS'], reject_colors=['F395_F410', 'F410_F430'])
-FEH_array.train(iterations=1)
+FEH_array.set_input_type()
+FEH_array.generate_inputs(assert_band=['F395'], assert_colors=['gSDSS_rSDSS'],
+                          reject_colors=['F395_F410'])  #assert_band=["F395"]
+
+FEH_array.train(iterations=2)
 FEH_array.eval_performance()
 FEH_array.write_network_performance()
-
-FEH_array.prediction(target)
+FEH_array.skim_networks(select=25)
+FEH_array.prediction(target, flag_thing = False)
 #FEH_array.predict_all_networks(target)
 FEH_array.write_training_results()
 #FEH_array.training_plots()

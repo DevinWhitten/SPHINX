@@ -22,29 +22,22 @@ def isin(array, target_filter):
     for ele in array:
         if target_filter in ele.split("_"):
             return True
-    
+
     return False
+
+
+def isnotin(array, target_filter):
+    ### Check array of colors and magnitudes and determine if filter is present
+    for ele in array:
+        if target_filter in ele.split("_"):
+            return False
+
+    return True
 
 class Network_Array():
     ### The goal here is to generate an array of networks corresponding to the
     ### combinations of possible network inputs, enables averaging,
-    '''
-    def __init__(self, training_set, interp_frame, target_variable,
-                 scale_frame, param_file, input_type="both", input_number=8, array_size=50):
 
-
-
-        self.training_set = training_set
-        self.interp_frame = interp_frame
-        self.target_var = target_variable
-        self.array_size = array_size
-        self.scale_frame = scale_frame
-        self.params = param_file.params
-
-        self.input_type=input_type
-        self.input_number = input_number
-
-    '''
 
     def __init__(self, training_set, interp_frame, target_variable,
                  scale_frame, param_file, input_type="both", input_number=8, array_size=50):
@@ -101,7 +94,7 @@ class Network_Array():
         return
 
 
-    def generate_inputs(self, assert_band=None, assert_colors=None, reject_colors=None):
+    def generate_inputs(self, assert_band=None, reject_band=None, assert_colors=None, reject_colors=None):
         ### Assemble the network array according to self.combinations
         print("... Generating", self.target_var,"network array")
         print("\tpre-assert band:  ", len(self.combinations))
@@ -110,6 +103,14 @@ class Network_Array():
             for band in assert_band:
                 print("... Asserting: ", band)
                 self.combinations = self.combinations[np.array([isin(ele, band) for ele in self.combinations])]
+
+        print("\tpre-assert band:  ", len(self.combinations))
+        if reject_band != None:
+
+            for band in reject_band:
+                print("... Rejecting the following band:  ", band)
+                self.combinations = self.combinations[np.array([isnotin(ele, band) for ele in self.combinations])]
+
 
         print("\t pre-assert colors length:   ", len(self.combinations))
         #return self.combinations
@@ -124,7 +125,7 @@ class Network_Array():
         if reject_colors != None:
             print("... Rejecting the following colors:  ", reject_colors)
             for color in reject_colors:
-                assert (True in [color in combo for combo in self.combinations]), color + " not in network combinations!"    
+                assert (True in [color in combo for combo in self.combinations]), color + " not in network combinations!"
                 self.combinations = self.combinations[np.array([color not in combo for combo in self.combinations])]
 
         ### shuffle combinations
@@ -234,10 +235,10 @@ class Network_Array():
         if self.target_var == 'FEH':
             print("FEH:  setting low_mad in network score")
             [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
-            total_mad = np.array([net.get_mad() for net in self.network_array]) + np.array([net.get_low_mad() for net in self.network_array])
+            total_mad = np.array([net.get_mad() for net in self.network_array]) + 2.*np.array([net.get_low_mad() for net in self.network_array])
 
-        elif self.target_var == "TEMP":
-            print("TEMP:  setting mad to network score")
+        elif self.target_var == "TEFF":
+            print("TEFF:  setting mad to network score")
             total_mad = np.array([net.get_mad() for net in self.network_array])
 
         else:
@@ -250,6 +251,20 @@ class Network_Array():
 
         return
 
+        ######## NEW EDIT, SELECT SPECIFIED NUMBER OF HIGHEST PERFORMING NETWORKS
+
+    def skim_networks(self, select):
+        ### select specified the number of highest performing networks to keep
+        print("...skim_networks()")
+        self.network_array = [self.network_array[i] for i in np.argsort(self.scores)[::-1]]
+        self.scores = self.scores[np.argsort(self.scores)[::-1]]
+
+        #### should be sorted, now skim
+        self.network_array = self.network_array[:select]
+        self.scores = self.scores[:select]
+
+        return
+
     def write_network_performance(self, filename=None):
         ### Write out the performance of the randomly drawn input combinations
         ### Must have run eval_performance()
@@ -257,7 +272,7 @@ class Network_Array():
         print("... write_network_performance()")
         if filename == None: filename = "network_combination_residuals.pkl"
 
-        if self.target_var == "TEMP":
+        if self.target_var == "TEFF":
             print("... writing network input residuals to cache/", filename)
 
             network_residual = {"combination": [net.inputs for net in self.network_array],
@@ -281,7 +296,7 @@ class Network_Array():
 
         return
 
-    def prediction(self, target_set):
+    def prediction(self, target_set, flag_thing=True):
 
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
@@ -305,13 +320,17 @@ class Network_Array():
         self.target_err = np.array([train_fns.MAD_finite(np.array(row))/0.6745 for row in output*nan_flag])
         #self.target_err = np.array([train_fns.weighted_error(row, self.scores) for row in output*nan_flag])
 
-        print("... masking output matrix with network flags")
+
         ### FLAG MASKS extrapolation estimates, however scores will be different for each row!!
         flagged_score_array = np.dot(flag, self.scores)
         flagged_score_array[flagged_score_array == 0] = np.nan
 
-
-        self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
+        if flag_thing:
+            print("\t... masking output matrix with network flags")
+            self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
+        else:
+            print("\t... not masking output matrix with network flags")
+            self.target_est = np.divide(np.dot(output, self.scores), self.scores.sum())
 
         print("... appending columns to target_set")
 

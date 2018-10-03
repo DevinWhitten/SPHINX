@@ -167,6 +167,8 @@ class Dataset():
         elif self.variable == "TEFF":
             print("I've not implemented this feature")
 
+
+
     def SNR_threshold(self, SNR_limit = 30):
         ### Remove sources with SNR below the SNR_limit from self.custom
         ### This will probably greatly improve training
@@ -182,9 +184,9 @@ class Dataset():
         self.custom[self.custom['EBV_SFD'] < EBV_limit]
         print("Stars removed:  ", original_length - len(self.custom))
 
-    def format_names(self):
+    def format_names(self, band_s_n=None):
         span_window()
-        print("format_names()")
+        print("...format_names()")
 
         if self.mode == "SEGUE":
             #df.rename(columns=dict(zip(old_names, new_names)), inplace=True)
@@ -193,7 +195,16 @@ class Dataset():
             self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR":"FEH_ERR"}, inplace=True)
 
         elif self.mode == "IDR_SEGUE":
-            self.custom.rename(columns=dict(zip(self.params['idr_segue_bands'], self.params['format_bands'])), inplace=True)
+            #self.custom.rename(columns=dict(zip(self.params['idr_segue_bands'], self.params['format_bands'])), inplace=True)
+            if band_s_n == "synthetic":
+                print("\tusing synthetic bands for training")
+                self.custom.rename(columns=dict(zip(self.params['synth_bands'], self.params['format_bands'])), inplace=True)
+            elif band_s_n == "native":
+                print("\tusing native bands for training")
+                self.custom.rename(columns=dict(zip(self.params['native_bands'], self.params['format_bands'])), inplace=True)
+            else:
+                print("\tunresolved band_s_n!!!:  ", band_s_n)
+
             self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
             self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
 
@@ -211,6 +222,20 @@ class Dataset():
             print("I haven't implemented that catalog yet")
 
 
+
+    def synth_native_reject(self, limit):
+        span_window()
+        ## just remove stars whose synthetic magnitudes and native magnitudes differ beyond a specified value
+        print("...synth_native_reject()  ", limit )
+        original = len(self.custom)
+        for synth_band, format_band in zip(self.params['synth_bands'], self.params['native_bands']):
+
+            self.custom = self.custom[abs(self.custom[synth_band] - self.custom[format_band]) < limit]
+            print(synth_band, format_band, " removed:  ", original - len(self.custom))
+            original = len(self.custom)
+
+
+
     def faint_bright_limit(self):
         span_window()
         print("faint_bright_limit()")
@@ -226,19 +251,23 @@ class Dataset():
 
 
 
-    def error_reject(self):
+    def error_reject(self, training=False):
         span_window()
-        print("error_reject()")
+        print("...error_reject()")
         #### Reject observations above the input error threshold
+        print("\tRejection with max err:  ", self.params['mag_err_max'])
+        original = len(self.custom)
         for band in self.error_bands:
             self.custom = self.custom[self.custom[band] < self.params['mag_err_max']]
 
-        if self.variable == "TEFF":
-            self.custom = self.custom[self.custom['TEFF_ERR'] < self.params['T_ERR_MAX']]
+        if training:
+            if self.variable == "TEFF":
+                self.custom = self.custom[self.custom['TEFF_ERR'] < self.params['T_ERR_MAX']]
 
-        elif self.variable == "FEH":
-            self.custom = self.custom[self.custom['FEH_ERR'] < self.params['FEH_ERR_MAX']]
+            elif self.variable == "FEH":
+                self.custom = self.custom[self.custom['FEH_ERR'] < self.params['FEH_ERR_MAX']]
 
+        print("\tRejected:   ", original - len(self.custom))
 
     def format_colors(self):
         ### generate color combinations corresponding to each of the params['format_bands']
@@ -500,9 +529,15 @@ class Dataset():
         else:
             print("Error in input specification")
 
-        for band in input_array:
-            popt, pcov = gaussian_sigma(self.custom[band])
-            print("\t", '{:>9}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
+        try:
+            for band in input_array:
+                popt, pcov = gaussian_sigma(self.custom[band])
+                print("\t", '{:>9}'.format(band), " : ", '%.3f' %popt[1], '%.3f' %popt[2])
+        except:
+            print("median -- range")
+            for band in input_array:
+
+                print("\t", '{:>9}'.format(band), " : ", '%.3f' % np.median(self.custom[band]), '%.3f' % (max(self.custom[band]) - min(self.custom[band])))
 
     def get_length(self):
         return len(self.custom)
@@ -516,32 +551,41 @@ class Dataset():
         self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
         #self.EBV_threshold(self.params['EBV_MAX']) if EBV_limit==None else self.EBV_threshold(EBV_limit)
-        self.format_names()
+        if self.mode != "SEGUE":
+            self.synth_native_reject(0.3)
+
+        self.format_names(band_s_n = self.params['band_type'])
         #self.set_scale_frame(scale_frame)
+
         self.faint_bright_limit()
-        self.error_reject()
+        self.error_reject(training=True) ### training=True renders process only applicable to the training Dataset
         self.format_colors()
         self.set_bounds(set_bounds)
 
         #for band in self.custom.columns:
             #print(band)
 
-
+        print("pre-scale input stats")
+        self.get_input_stats(inputs='colors')
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
+            print("\tGenerating scale frame for self")
             self.gen_scale_frame("self")
         else:
             self.set_scale_frame(scale_frame)
 
         if normal_columns != None : self.force_normal(columns=normal_columns, verbose=verbose, show_plot=show_plot)
-
+        #self.get_input_stats(inputs='colors')
         self.uniform_sample(bin_number = bin_number, size=bin_size)  ### Probably want to uniform sample before setting scale frame
 
+
+        #self.get_input_stats(inputs='colors')
 
         #self.outlier_rejection(interp_frame)
 
 
         self.scale_photometry()
+        self.get_input_stats(inputs='colors')
         ###################################
 
         self.gen_interp_frame("self")
