@@ -1,8 +1,18 @@
+#################################################################
+# Author: Devin D Whitten
+# Date:   October 3, 2018
+# This is the main driver of the [Fe/H] determinations with SPHINX
+
+# All specifications for running should be made in the input
+# parameter file.
+# Please direct questions/suggestions to dwhitten@nd.edu
+
+#################################################################
+
 import pandas as pd
 import numpy as np
 import param_P0 as param
 import sys,os
-##### This script is a test of the metallicity procedures
 
 sys.path.append("interface")
 import train_fns, net_functions, network_array
@@ -10,7 +20,7 @@ from train_fns import span_window
 
 ################################################################################
 span_window()
-print("  Main_v2.0.py  ")
+print("  Main_feh.py  ")
 
 ################################################################################
 ### read target file
@@ -111,9 +121,6 @@ FEH_array.write_training_results()
 #FEH_array.training_plots()
 
 target.merge_master(array_size=param.params['array_size'])
-#print(target.custom.columns)
 target.save()
-
-#### Test prediction column add
 
 #target.save(filename="FEH_array_testing.csv")

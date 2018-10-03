@@ -1,3 +1,15 @@
+#################################################################
+# Author: Devin D Whitten
+# Date:   October 3, 2018
+# This is the main driver of the Teff determinations with SPHINX
+
+# All specifications for running should be made in the input
+# parameter file.
+# Please direct questions/suggestions to dwhitten@nd.edu
+
+#################################################################
+
+
 import pandas as pd
 import numpy as np
 import param_P0_teff as param
@@ -12,7 +24,6 @@ from train_fns import span_window
 print("  temp_main.py  ")
 print(param.params['output_filename'])
 print("Target set:  ", param.params['target_path'])
-#print("Training set:", param.params['training_set'])
 print("Target bands: ", param.params['target_bands'])
 
 target = train_fns.Dataset(path=param.params['target_path'], variable='TEFF',
