@@ -7,6 +7,8 @@
 # parameter file.
 # Please direct questions/suggestions to dwhitten@nd.edu
 
+# Whitten et al. 2018
+
 #################################################################
 
 
@@ -16,8 +18,7 @@ import param_P0_teff as param
 import sys,os
 
 sys.path.append("interface")
-import train_fns, net_functions, network_array
-from train_fns import span_window
+import train_fns, net_functions, network_array, io_functions
 
 
 #################################################################
@@ -42,7 +43,7 @@ target.format_names()
 
 
 
-span_window()
+io_functions.span_window()
 
 target.format_colors()
 #target.gen_scale_frame("self", method="gauss")
@@ -54,7 +55,7 @@ print(target.custom['gSDSS_iSDSS'])
 
 target.get_input_stats(inputs="colors")
 
-span_window()
+io_functions.span_window()
 print("Reading/Formatting Training Database")
 
 training = train_fns.Dataset(path=param.params['segue_path'], variable="TEFF",

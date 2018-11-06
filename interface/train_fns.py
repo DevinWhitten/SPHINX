@@ -9,6 +9,7 @@ import numpy as np
 ##### Interface for main training set generation procedure
 import os, sys
 sys.path.append("interface")
+import io_functions
 #import temperature_functions
 #import param_teff as param
 import itertools
@@ -17,9 +18,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 plt.ion()
-def span_window():
-    print("-" * os.get_terminal_size().columns)
-    return
+
 
 def MAD(input_vector):
 
@@ -185,7 +184,7 @@ class Dataset():
         print("Stars removed:  ", original_length - len(self.custom))
 
     def format_names(self, band_s_n=None):
-        span_window()
+        io_functions.span_window()
         print("...format_names()")
 
         if self.mode == "SEGUE":
@@ -224,7 +223,7 @@ class Dataset():
 
 
     def synth_native_reject(self, limit):
-        span_window()
+        io_functions.span_window()
         ## just remove stars whose synthetic magnitudes and native magnitudes differ beyond a specified value
         print("...synth_native_reject()  ", limit )
         original = len(self.custom)
@@ -237,7 +236,7 @@ class Dataset():
 
 
     def faint_bright_limit(self):
-        span_window()
+        io_functions.span_window()
         print("faint_bright_limit()")
         print("custom columns:     ", self.custom.columns)
         for band in self.params['format_bands']:
@@ -252,7 +251,7 @@ class Dataset():
 
 
     def error_reject(self, training=False):
-        span_window()
+        io_functions.span_window()
         print("...error_reject()")
         #### Reject observations above the input error threshold
         print("\tRejection with max err:  ", self.params['mag_err_max'])
@@ -293,7 +292,7 @@ class Dataset():
         ### "median" makes use of the fscale and (max - min)/2.0 for center
         ### "gauss" is what we're used to
 
-        span_window()
+        io_functions.span_window()
         print("...gen_scale_frame()")
         ### Generate scale_frame from input_frame and inputs
         calibration = pd.DataFrame()
@@ -323,7 +322,7 @@ class Dataset():
     def gen_interp_frame(self, input_frame):
         ### Create interpolation frame, likely based on the target set.
         ### Need to be aware of the state of inputs, whether they are normalized or not
-        span_window()
+        io_functions.span_window()
         print("...gen_interp_frame()")
         calibration = pd.DataFrame()
 
@@ -353,7 +352,7 @@ class Dataset():
         ####   default pivot column set to F515 for now.
         ### Precondition:  Must have self.scale_frame defined
 
-        span_window()
+        io_functions.span_window()
 
 
         print("force_normal()")
@@ -428,7 +427,7 @@ class Dataset():
             print("---------------------------------------------------------------")
 
     def scale_photometry(self):
-        span_window()
+        io_functions.span_window()
         print("...scale_photometry()")
 
         #### Precondition: We need self.scale_frame to be set
@@ -442,7 +441,7 @@ class Dataset():
         self.custom = working
 
     def scale_variable(self, mean=None, std=None, variable=None, method="median"):
-        span_window()
+        io_functions.span_window()
         print("...scale_variable()")
         if (mean == None) and (std==None):
             if method == "gauss":
@@ -479,7 +478,7 @@ class Dataset():
         ### Might want to revisit the size critera
         ### Just implement a way of maximizing the binsize
 
-        span_window()
+        io_functions.span_window()
         print("... uniform_sample()")
         if self.variable == "TEFF":
             Bounds = np.linspace(self.params["TMIN"], self.params['TMAX'], bin_number)
@@ -515,7 +514,7 @@ class Dataset():
     ############################################################################
 
     def get_input_stats(self, inputs="both"):
-        span_window()
+        io_functions.span_window()
         print(self.variable, " input statistics: ")
         if inputs == "magnitudes":
             input_array = self.params['format_bands']
