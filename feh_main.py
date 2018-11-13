@@ -17,7 +17,6 @@ import sys,os
 
 sys.path.append("interface")
 import train_fns, net_functions, network_array, io_functions
-from train_fns import span_window
 ################################################################################
 io_functions.span_window()
 io_functions.print_init()
@@ -63,7 +62,7 @@ io_functions.span_window()
 
 #### Define training set
 
-training_FEH.process(scale_frame = param.params['scale_frame'], threshold=0.20,
+training_FEH.process(scale_frame = "self", threshold=0.20,
                      SNR_limit=30, normal_columns=None,
                      set_bounds = True, bin_number=25, bin_size=200,
                      verbose=True, show_plot=True)
