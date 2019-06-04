@@ -14,9 +14,12 @@ import multiprocessing
 import matplotlib.pyplot as plt
 #import param_IDR as param
 import sys, itertools
+import pickle as pkl
 
 sys.path.append("interface")
-import train_fns, net_functions
+import train_fns, net_functions, io_functions
+
+
 def isin(array, target_filter):
     ### Check array of colors and magnitudes and determine if filter is present
     for ele in array:
@@ -39,8 +42,10 @@ class Network_Array():
     ### combinations of possible network inputs, enables averaging,
 
 
-    def __init__(self, training_set, interp_frame, target_variable,
-                 scale_frame, param_file, input_type="both", input_number=8, array_size=50):
+    def __init__(self, training_set, target_variable,
+                 interp_frame, scale_frame,
+                 param_file, input_type="both", input_number=8,
+                 array_size=50, solver='sgd'):
 
 
         self.params = param_file.params
@@ -53,9 +58,11 @@ class Network_Array():
 
         self.input_type=input_type
         self.input_number = input_number
+        self.solver = solver
 
 
     def set_input_type(self):
+        ### DEPRECIATED, use construct_input_combinations()
 
         print("Network input_type:  ", self.input_type)
 
@@ -75,17 +82,6 @@ class Network_Array():
         print(self.inputs)
 
 
-
-        #try:
-        #    print("... checking cache for combination list")
-        #    file_in = open("cache/combinations_test.pkl", 'rb')
-        #    self.combinations = pkl.load(file_in)
-        #    file_in.close()
-        #except:
-        #    self.combinations = np.array(list(itertools.combinations(self.inputs, self.input_number)))
-        #    file_out = open("cache/combinations_test.pkl", "wb")
-        #    pkl.dump(self.combinations, file_out)
-        #    file_out.close()
         print("...Generating input combinations")
         self.combinations = np.array(list(itertools.combinations(self.inputs, self.input_number)))
 
@@ -93,19 +89,41 @@ class Network_Array():
         print(len(self.combinations), " of given input type")
         return
 
+    def construct_input_combinations(self):
+        ### just builds the combinations ndarray for all of the possible color combinations given the input number
 
-    def generate_inputs(self, assert_band=None, reject_band=None, assert_colors=None, reject_colors=None):
+        print("... generating input combinations : ", self.input_type)
+
+        if self.input_type == "both":
+            self.inputs = self.params['format_bands'] + self.training_set.colors
+
+        elif self.input_type == "magnitudes":
+            self.inputs = self.params['format_bands']
+
+        elif self.input_type == "colors":
+            self.inputs = self.training_set.colors
+
+        else:
+            print("ERROR: Bad network input_type")
+
+        self.combinations = np.array(list(itertools.combinations(self.inputs, self.input_number)))
+        print(len(self.combinations), " of given input type")
+        return
+
+    def generate_inputs(self, assert_band=None, reject_band=None,
+                              assert_colors=None, reject_colors=None):
+
         ### Assemble the network array according to self.combinations
         print("... Generating", self.target_var,"network array")
         print("\tpre-assert band:  ", len(self.combinations))
 
-        if assert_band != None:
+        if type(assert_band) != type(None):
             for band in assert_band:
                 print("... Asserting: ", band)
                 self.combinations = self.combinations[np.array([isin(ele, band) for ele in self.combinations])]
 
         print("\tpre-assert band:  ", len(self.combinations))
-        if reject_band != None:
+        if type(reject_band) != type(None):
 
             for band in reject_band:
                 print("... Rejecting the following band:  ", band)
@@ -114,7 +132,7 @@ class Network_Array():
 
         print("\t pre-assert colors length:   ", len(self.combinations))
         #return self.combinations
-        if assert_colors != None:
+        if type(assert_colors) != type(None):
             for color in assert_colors:
                 print(".... Asserting:  ", color)
                 self.combinations = self.combinations[np.array([color in combo for combo in self.combinations])]
@@ -122,7 +140,7 @@ class Network_Array():
 
         print("\tpre-color rejection combinations:  ", len(self.combinations))
 
-        if reject_colors != None:
+        if type(reject_colors) != type(None):
             print("... Rejecting the following colors:  ", reject_colors)
             for color in reject_colors:
                 assert (True in [color in combo for combo in self.combinations]), color + " not in network combinations!"
@@ -132,14 +150,29 @@ class Network_Array():
 
         self.combinations = self.combinations[np.random.permutation(len(self.combinations))]
         print(len(self.combinations), " total input combinations")
+
+        return
+
+    def initialize_networks(self):
+        ### just initializes the Network classes for each ANN subunit in the array
+
+        print("\t...initializing network array:  ", self.array_size)
+        print("\t...solver:  ", self.solver)
+
+
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation,
-                                                    hidden_layer=6, solver = 'adam', ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
+                                                    hidden_layer=6, solver = self.solver, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
+
+        return
 
 
     def train(self, train_fct=0.65, iterations=3):
-        print("... training array")
+        io_functions.span_window()
+        print("... training network array")
+        io_functions.span_window()
         ### Trains array of networks, sets the verification and target set
         ### iterations: number of networks to train
+        ### initializes the verification and training sets
 
 
         self.verification_set = self.training_set.custom.iloc[int(len(self.training_set.custom)*train_fct):].copy()
@@ -154,22 +187,11 @@ class Network_Array():
             [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
 
 
-            #################################################################################
-            # Let's try to parallelize here
-            #p = multiprocessing.pool()
-
-
-
-
-
-            #################################################################################
-
 
             ###### Adding the outlier rejection here
             ### no score information yet
             output = np.matrix([net.predict(self.training_set) for net in self.network_array]).T
 
-            #print(output)
 
             self.training_set.loc[:, 'NET_' + self.target_var] = [np.average(output[i, :]) for i in range(output.shape[0])]
             #self.training_set.loc[:, self.target_var] = train_fns.unscale(self.training_set[self.target_var], *self.scale_frame[self.target_var])
@@ -199,9 +221,6 @@ class Network_Array():
 
 
 
-    def train_test(self, net):
-        net[1].train_on(self.training_set, net[0])
-        return
 
     def train_pool(self, train_fct=0.70, iterations=50, core_fraction=0.5):
         ### Let's try to multiprocess the network_array training
@@ -224,10 +243,10 @@ class Network_Array():
         ### Sets the median absolute deviation
 
         ### This should take into account the low residual in the event that variable == FEH
+        print("...eval_performance()")
+        print("...target variable: ", self.target_var)
 
         [net.compute_residual(verify_set = self.verification_set, scale_frame = self.scale_frame) for net in self.network_array]
-        #thing = self.network_array[0].predict(input_frame = self.verification_set)
-        #print(self.network_array[2].residual* self.scale_frame[self.target_var].iloc[1])
 
 
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
@@ -239,6 +258,9 @@ class Network_Array():
 
         elif self.target_var == "TEFF":
             print("TEFF:  setting mad to network score")
+            total_mad = np.array([net.get_mad() for net in self.network_array])
+
+        elif self.target_var == 'CFE':
             total_mad = np.array([net.get_mad() for net in self.network_array])
 
         else:
@@ -255,6 +277,8 @@ class Network_Array():
 
     def skim_networks(self, select):
         ### select specified the number of highest performing networks to keep
+        ### Precondition: eval_performance() has set the scores
+
         print("...skim_networks()")
         self.network_array = [self.network_array[i] for i in np.argsort(self.scores)[::-1]]
         self.scores = self.scores[np.argsort(self.scores)[::-1]]
@@ -296,7 +320,7 @@ class Network_Array():
 
         return
 
-    def prediction(self, target_set, flag_thing=True):
+    def prediction(self, target_set, flag_invalid=True):
 
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
@@ -325,7 +349,7 @@ class Network_Array():
         flagged_score_array = np.dot(flag, self.scores)
         flagged_score_array[flagged_score_array == 0] = np.nan
 
-        if flag_thing:
+        if flag_invalid:
             print("\t... masking output matrix with network flags")
             self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
         else:
@@ -383,6 +407,7 @@ class Network_Array():
         ### show the training results in one-to-one residual plots
         span = np.linspace(min(self.verification_set[self.target_var]), max(self.verification_set[self.target_var]), 30)
         pp = PdfPages(self.params["output_directory"] + self.target_var + "_plot.pdf")
+
         fig, ax = plt.subplots(2,1)
 
         ax[0].scatter(self.verification_set[self.target_var], self.verification_set['NET_' + self.target_var],
@@ -417,6 +442,16 @@ class Network_Array():
 
 
 
-    def save_state(self):
-        ### Need to work on this.
+    def save_state(self, file_name):
+        ### For now I will try to simply save the network in a pickle file
+        print("... saving network")
+        pkl.dump(open("net_pkl/" + file_name, 'wb'))
+
+
+        return
+
+    def load_state(self, file_name):
+        print("... loading:  ", file_name)
+        self = pkl.load(open("net_pkl/" + file_name, 'rb'))
+
         return
