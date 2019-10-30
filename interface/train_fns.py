@@ -96,23 +96,45 @@ def unscale(input_vector, mean, scale):
 class Dataset():
     ### Trying to solve the problem of overcomplicating the main.py with training functions
 
-    def __init__(self,path, variable, params, mode="SEGUE",
+    def __init__(self, variable, params, mode="SEGUE",
                 scale_frame=pd.DataFrame(), interp_frame=pd.DataFrame()):
         ### path should be set from param file
         ### variable: "TEFF" or "FEH" dictates the behavior of training
         ### base set from which we process everything
-        print("... Reading database:  ", path)
+
+        ########################################################################
+
+        if mode == 'SEGUE':
+            self.error_bands = params['segue_sigma']
+            self.read_path   = params['segue_path']
+
+        elif mode == 'TARGET':  ### For use of Dataset with the target list
+            self.error_bands = params['target_sigma']
+            self.read_path   = params['target_path']
+
+        elif mode == 'CUSTOM':
+            self.error_bands = params['training_sigma']
+            self.read_path   = params['training_path']
+
+        else:
+            print("I haven't implemented that set yet.")
+
+        ########################################################################
+
+        print("... Reading database:  ", self.read_path)
         ### Might(should) be compressed
         try:
-            self.master = pd.read_csv(path)
+            self.master = pd.read_csv(self.read_path)
         except:
-            print("... catalog was compressed.")
-            self.master = pd.read_csv(path, compression="gzip")
+            print("\tcatalog was compressed.")
+            self.master = pd.read_csv(self.read_path, compression="gzip")
+
+
 
         # generate ID for postprocessing remerge
         self.master.loc[:, "SPHINX_ID"] = np.arange(0, len(self.master), 1)
 
-        self.variable=variable
+        self.variable = variable
 
         ### this is the version of master that we will modify
         self.custom = self.master.copy(deep=True)
@@ -127,22 +149,9 @@ class Dataset():
 
         self.colors = []
 
-        if mode == 'SEGUE':
-            self.error_bands = params['segue_sigma']
 
-        elif mode == "IDR_SEGUE":
-            self.error_bands = params['idr_segue_sigma']
 
-        elif mode == "EDR_SEGUE":
-            self.error_bands = params['edr_segue_sigma']
-
-        elif mode == 'TARGET':  ### For use of Dataset with the target list
-            self.error_bands = params['target_sigma']
-
-        else:
-            print("I haven't implemented that set yet.")
-
-        print("Initial Network Size of: ", self.mode, len(self.custom))
+        print("\tInitial Network Size of: ", self.mode, len(self.custom))
 
     ############################################################################
     def remove_duplicates(self):
@@ -158,101 +167,95 @@ class Dataset():
 
     def remove_discrepant_variables(self, threshold):
         ### Remove stars whose ADOP and BIW estimates differ more than threshold
-        print("remove_discrepant_variables():  ", threshold)
+        print("... remove_discrepant_variables():  ", threshold)
 
         if self.variable == "FEH":
             self.custom = self.custom[np.abs(self.custom['FEH_ADOP'] - self.custom['FEH_BIW']) < threshold]
 
         elif self.variable == "TEFF":
-            print("I've not implemented this feature")
+            print("\tI've not implemented this feature")
 
 
 
     def SNR_threshold(self, SNR_limit = 30):
         ### Remove sources with SNR below the SNR_limit from self.custom
         ### This will probably greatly improve training
-        print("SNR_threshold")
+        print("... SNR_threshold")
         original_length = len(self.custom)
         self.custom = self.custom[self.custom['SNR'] > SNR_limit]
-        print("Stars removed:  ", original_length - len(self.custom))
+        print("\tStars removed:  ", original_length - len(self.custom))
 
     def EBV_threshold(self, EBV_limit):
         ## Remove stars above the EBV limit in param.params
-        print("EBV_threshold")
+        print("... EBV_threshold")
         original_length = len(self.custom)
         self.custom[self.custom['EBV_SFD'] < EBV_limit]
-        print("Stars removed:  ", original_length - len(self.custom))
+        print("\tStars removed:  ", original_length - len(self.custom))
 
     def format_names(self, band_s_n=None):
+        ### significant update on this, the training_variables are now listed in the param file, so just replace accordingly
         io_functions.span_window()
-        print("...format_names()")
+        print("... format_names()")
 
         if self.mode == "SEGUE":
-            #df.rename(columns=dict(zip(old_names, new_names)), inplace=True)
+
             self.custom.rename(columns=dict(zip(self.params['segue_bands'], self.params['format_bands'])), inplace=True)
-            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
-            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR":"FEH_ERR"}, inplace=True)
 
-        elif self.mode == "IDR_SEGUE":
-            #self.custom.rename(columns=dict(zip(self.params['idr_segue_bands'], self.params['format_bands'])), inplace=True)
-            if band_s_n == "synthetic":
-                print("\tusing synthetic bands for training")
-                self.custom.rename(columns=dict(zip(self.params['synth_bands'], self.params['format_bands'])), inplace=True)
-            elif band_s_n == "native":
-                print("\tusing native bands for training")
-                self.custom.rename(columns=dict(zip(self.params['native_bands'], self.params['format_bands'])), inplace=True)
-            else:
-                print("\tunresolved band_s_n!!!:  ", band_s_n)
+            self.custom.rename(columns = {item[1] : item[0] for item in self.params['segue_var']}, inplace=True)
+            self.custom.rename(columns = {item[1] : item[0] for item in self.params['segue_var_err']}, inplace=True)
 
-            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
-            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
 
-        elif self.mode == "EDR_SEGUE":
-            self.custom.rename(columns=dict(zip(self.params['edr_segue_bands'], self.params['format_bands'])), inplace=True)
-            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
-            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR": "FEH_ERR"}, inplace=True)
+        elif self.mode == 'CUSTOM':
+            print('\tReplacing:  ', self.params['training_bands'])
+            print('\tWith:       ', self.params['format_bands'])
+            self.custom.rename(columns=dict(zip(self.params['training_bands'], self.params['format_bands'])), inplace=True)
+
+            self.custom.rename(columns={item[1] : item[0] for item in self.params['training_var'].items()}, inplace=True)
+            self.custom.rename(columns={item[1] : item[0] for item in self.params['training_var_err'].items()}, inplace=True)
+
 
         elif self.mode == "TARGET": ### For use of Dataset with the target list
-            print("Replacing:  ", self.params['target_bands'])
-            print("With:       ", self.params['format_bands'])
+            print("\tReplacing:  ", self.params['target_bands'])
+            print("\tWith:       ", self.params['format_bands'])
             self.custom.rename(columns=dict(zip(self.params['target_bands'], self.params['format_bands'])), inplace=True)
 
         else:
-            print("I haven't implemented that catalog yet")
+            print("\tI haven't implemented that catalog yet")
 
 
 
     def synth_native_reject(self, limit):
         io_functions.span_window()
         ## just remove stars whose synthetic magnitudes and native magnitudes differ beyond a specified value
-        print("...synth_native_reject()  ", limit )
+        print("... synth_native_reject()  ", limit )
         original = len(self.custom)
         for synth_band, format_band in zip(self.params['synth_bands'], self.params['native_bands']):
 
             self.custom = self.custom[abs(self.custom[synth_band] - self.custom[format_band]) < limit]
-            print(synth_band, format_band, " removed:  ", original - len(self.custom))
+            print('\t', synth_band, format_band, " removed:  ", original - len(self.custom))
             original = len(self.custom)
 
 
 
     def faint_bright_limit(self):
         io_functions.span_window()
-        print("faint_bright_limit()")
-        print("custom columns:     ", self.custom.columns)
+
+        print("... faint_bright_limit()")
+        print("\tcustom columns:     ", self.custom.columns)
         for band in self.params['format_bands']:
             #print(self.custom)
             #print(self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)])
-            print("\t minimum in:", band, min(self.custom[band]))
+            print("\tminimum in:", band, min(self.custom[band]))
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
-            print("\t Current length after:", band, len(self.custom))
+            print("\tCurrent length after:", band, len(self.custom))
 
 
 
 
     def error_reject(self, training=False):
         io_functions.span_window()
-        print("...error_reject()")
+        print("... error_reject()")
         #### Reject observations above the input error threshold
         print("\tRejection with max err:  ", self.params['mag_err_max'])
         original = len(self.custom)
@@ -266,11 +269,17 @@ class Dataset():
             elif self.variable == "FEH":
                 self.custom = self.custom[self.custom['FEH_ERR'] < self.params['FEH_ERR_MAX']]
 
+            elif self.variable == 'CFE':
+                self.custom = self.custom[self.custom['CFE_ERR'] < self.params['CFE_ERR_MAX']]
+
+            elif self.variable == 'AC':
+                self.custom = self.custom[self.custom['AC_ERR'] < self.params['AC_ERR_MAX']]
+
         print("\tRejected:   ", original - len(self.custom))
 
     def format_colors(self):
         ### generate color combinations corresponding to each of the params['format_bands']
-        print("format_colors()")
+        print("... format_colors()")
         color_combinations = list(itertools.combinations(self.params['format_bands'], 2))
         self.colors = []
         for each in color_combinations:
@@ -279,11 +288,13 @@ class Dataset():
         return
 
     def set_bounds(self, run=False):
+        ### update to utilize self.variable
         print("...set_bounds()")
 
         if run == True:
-            self.custom = self.custom[self.custom["TEFF"].between(self.params['TMIN'], self.params['TMAX'], inclusive=True)]
-            self.custom = self.custom[self.custom["FEH"].between(self.params['FEH_MIN'], self.params['FEH_MAX'], inclusive=True)]
+            self.custom = self.custom[self.custom[self.variable].between(self.params[self.variable + '_MIN'], self.params[self.variable + '_MAX'], inclusive=True)]
+
+
 
 
     ### Generators
@@ -293,7 +304,7 @@ class Dataset():
         ### "gauss" is what we're used to
 
         io_functions.span_window()
-        print("...gen_scale_frame()")
+        print("... gen_scale_frame()")
         ### Generate scale_frame from input_frame and inputs
         calibration = pd.DataFrame()
 
@@ -313,7 +324,7 @@ class Dataset():
                 calibration.loc[:, band] = [(p_min + p_min)/2.0, np.abs(p_max - p_min)]
 
         else:
-            print("I haven't implemented that scaling method")
+            print("\tI haven't implemented that scaling method")
 
         self.scale_frame = calibration
         return self.scale_frame
@@ -323,7 +334,7 @@ class Dataset():
         ### Create interpolation frame, likely based on the target set.
         ### Need to be aware of the state of inputs, whether they are normalized or not
         io_functions.span_window()
-        print("...gen_interp_frame()")
+        print("... gen_interp_frame()")
         calibration = pd.DataFrame()
 
         if input_frame == "self":
@@ -340,7 +351,7 @@ class Dataset():
         ##### INCORRECT IMPLEMENTATION, REVISION NEEDED
         ### Just reject magnitudes outside of limits defined by interp_frame
         ### this only needs to be run on relevant network inputs...
-        print("outlier_rejection()")
+        print("... outlier_rejection()")
 
         for band in self.params['format_bands']:
                 self.custom = self.custom[self.custom[band].between(interp_frame[band].iloc[0], interp_frame[band].iloc[1], inclusive=True)]
@@ -355,7 +366,7 @@ class Dataset():
         io_functions.span_window()
 
 
-        print("force_normal()")
+        print("... force_normal()")
         #print(self.custom.columns)
         for column in columns:
 
@@ -365,15 +376,15 @@ class Dataset():
 
             distro = np.array(self.custom[column][np.isfinite(self.custom[column])])
             hist = np.histogram(distro, bins)
-            print(column, " : ", len(distro))
+            print('\t', column, " : ", len(distro))
 
             xedges = hist[1]
             xbins = [0.5 * (hist[1][i] + hist[1][i+1]) for i in range(len(hist[1])-1)]
             ybins = hist[0]
             #print("HERE")
             fixed_mean, fixed_std = self.scale_frame[column].iloc[0], self.scale_frame[column].iloc[1]
-            print("Forced Normal mean:  ", fixed_mean)
-            print("Forced Normal std:   ", fixed_std)
+            print("\tForced Normal mean:  ", fixed_mean)
+            print("\tForced Normal std:   ", fixed_std)
 
             ## use interpolation to estimate the initial a value
             linear = interp1d(xbins, ybins)
@@ -389,7 +400,7 @@ class Dataset():
 
 
             BINS = []
-            print("a:  ", root_res.x)
+            print("\ta:  ", root_res.x)
             if show_plot==True:
                 fig,ax = plt.subplots(1,2, figsize=(10,4))
                 ax[0].hist(self.custom[column], bins=bins)
@@ -411,9 +422,9 @@ class Dataset():
                 shuffle = current.iloc[np.random.permutation(len(current))]
                 BINS.append(shuffle.iloc[0:int(forced_gauss(xbins[i], root_res.x))])
                 if verbose==True:
-                    print("x_cent:      ", xbins[i])
-                    print("max(x_cent): ", int(forced_gauss(xbins[i], root_res.x)))
-                    print("Obtained:    ", len(BINS[i]))
+                    print("\tx_cent:      ", xbins[i])
+                    print("\tmax(x_cent): ", int(forced_gauss(xbins[i], root_res.x)))
+                    print("\tObtained:    ", len(BINS[i]))
 
             selection = pd.concat(BINS)
 
@@ -428,7 +439,7 @@ class Dataset():
 
     def scale_photometry(self):
         io_functions.span_window()
-        print("...scale_photometry()")
+        print("... scale_photometry()")
 
         #### Precondition: We need self.scale_frame to be set
         ### performs scaling from inputs defined in params.format_bands
@@ -442,15 +453,15 @@ class Dataset():
 
     def scale_variable(self, mean=None, std=None, variable=None, method="median"):
         io_functions.span_window()
-        print("...scale_variable()")
+        print("... scale_variable()")
         if (mean == None) and (std==None):
             if method == "gauss":
                 try:
-                    print("scaling", self.variable, "on gaussian")
+                    print("\tscaling", self.variable, "on gaussian")
                     popt, pcov = gaussian_sigma(self.custom[self.variable])
                     self.scale_frame[self.variable] = [popt[1], popt[2]]
                 except:
-                    print("scaling", self.variable, "on mean/std")
+                    print("\tscaling", self.variable, "on mean/std")
                     self.scale_frame[self.variable] = [np.mean(self.custom[self.variable]), np.std(self.custom[self.variable])]
 
             elif method == "median":
@@ -463,7 +474,7 @@ class Dataset():
                                                     self.scale_frame[self.variable].iloc[1])
 
         else:
-            print("I have not implemented this yet")
+            print("\tI have not implemented this yet")
 
         print("\t", self.variable, " mean: ", self.scale_frame[self.variable].iloc[0])
         print("\t", self.variable, " std:  ", self.scale_frame[self.variable].iloc[1])
@@ -480,21 +491,18 @@ class Dataset():
 
         io_functions.span_window()
         print("... uniform_sample()")
-        if self.variable == "TEFF":
-            Bounds = np.linspace(self.params["TMIN"], self.params['TMAX'], bin_number)
-            variable = "TEFF"
+        print('\t', self.variable)
 
-        elif self.variable == "FEH":
-            Bounds = np.linspace(self.params["FEH_MIN"], self.params['FEH_MAX'], bin_number)
-            variable = "FEH"
+        try:
+            Bounds = np.linspace(self.params[self.variable + "_MIN"], self.params[self.variable + '_MAX'], bin_number)
 
-        else:
-            print("I haven't implemented that variable yet")
+        except:
+            print("\tProblem with: ", self.variable, " in uniform_sample()")
 
         BIN = []
 
         for i in range(len(Bounds) - 1):
-            Current_Chunk = self.custom[(self.custom[variable] > Bounds[i]) & (self.custom[variable] < Bounds[i+1])]
+            Current_Chunk = self.custom[(self.custom[self.variable] > Bounds[i]) & (self.custom[self.variable] < Bounds[i+1])]
             BIN.append(Current_Chunk.iloc[np.random.permutation(len(Current_Chunk))][0:size])
 
 
@@ -515,7 +523,7 @@ class Dataset():
 
     def get_input_stats(self, inputs="both"):
         io_functions.span_window()
-        print(self.variable, " input statistics: ")
+        print('\t', self.variable, " input statistics: ")
         if inputs == "magnitudes":
             input_array = self.params['format_bands']
 
@@ -526,7 +534,7 @@ class Dataset():
             input_array = self.params['format_bands'] + self.colors
 
         else:
-            print("Error in input specification")
+            print("\tError in input specification")
 
         try:
             for band in input_array:
@@ -547,16 +555,18 @@ class Dataset():
         #### just run all of the necessary procedures on the training database
         ## normal_columns: columns that subject to force_normal()
         print("... Processing ", self.variable, " training set")
-        self.remove_discrepant_variables(threshold)
+        #self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
         #self.EBV_threshold(self.params['EBV_MAX']) if EBV_limit==None else self.EBV_threshold(EBV_limit)
-        if self.mode != "SEGUE":
-            self.synth_native_reject(0.3)
+        #if self.mode != "SEGUE":
+        #    self.synth_native_reject(0.3)
 
         self.format_names(band_s_n = self.params['band_type'])
         #self.set_scale_frame(scale_frame)
 
         self.faint_bright_limit()
+
+
         self.error_reject(training=True) ### training=True renders process only applicable to the training Dataset
         self.format_colors()
         self.set_bounds(set_bounds)
@@ -564,7 +574,7 @@ class Dataset():
         #for band in self.custom.columns:
             #print(band)
 
-        print("pre-scale input stats")
+        print("\tpre-scale input stats")
         self.get_input_stats(inputs='colors')
         ####### SCALE_FRAME section #######
         if type(scale_frame) == str:  ### We'll have to come back to this
@@ -606,18 +616,18 @@ class Dataset():
         #columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']
         #if which == "all"
         if array_size != 0:
-            print("merging final parameters")
-            columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID'] + self.colors
+            print("... merging final parameters")
+            columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']# + self.colors
             #columns = columns + ["NET_" + str(i) + "_" + self.variable for i in range(array_size)]
             #columns = columns + ["NET_" + str(i) + "_" + self.variable + "_FLAG" for i in range(array_size)]
             self.custom = pd.merge(self.master,self.custom[columns], on="SPHINX_ID")
         else:
-            print("Sorry about the duplicate columns")
+            print("... Sorry about the duplicate columns")
             self.custom = pd.merge(self.master,self.custom, on="SPHINX_ID")
         #[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']]
 
     def save(self, filename=None):
-        print("FILENAME:  ", filename)
+        print("... FILENAME:  ", filename)
         if filename == None:
             filename = self.params['output_filename']
 

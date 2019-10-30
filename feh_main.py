@@ -12,22 +12,22 @@
 
 import pandas as pd
 import numpy as np
-import param_IDR as param
+import param_SPLUS82 as param
 import sys,os
 
 sys.path.append("interface")
 import train_fns, net_functions, network_array, io_functions
 ################################################################################
 io_functions.span_window()
-io_functions.print_init()
-
+io_functions.intro()
 
 ################################################################################
 ### read target file
 print("Target set:  ", param.params['target_path'])
 
-target = train_fns.Dataset(path=param.params['target_path'], variable='FEH',
-                           params=param.params, mode="TARGET")
+target = train_fns.Dataset(variable='FEH',
+                           params=param.params,
+                           mode="TARGET")
 
 #### Process target catalog
 print("1:  ", len(target.custom))
@@ -51,8 +51,9 @@ target.format_colors()
 ################################################################################
 ### read training file
 
-training_FEH = train_fns.Dataset(path=param.params['segue_path'], variable="FEH",
-                                 params=param.params, mode="SEGUE")
+training_FEH = train_fns.Dataset(variable="FEH",
+                                 params=param.params,
+                                 mode="CUSTOM")
 
 ################################################################################
 io_functions.span_window()
@@ -101,18 +102,22 @@ print("... Assemble FEH network array")
 FEH_array = network_array.Network_Array(training_FEH, interp_frame=training_FEH.interp_frame,
                                         target_variable = "FEH", scale_frame = target.scale_frame,
                                         param_file = param,
-                                        input_type="colors", input_number = 6, array_size=param.params['array_size'])
+                                        input_type="colors")
 
 
 FEH_array.set_input_type()
-FEH_array.generate_inputs(assert_band=['F395'], assert_colors=['gSDSS_rSDSS'],
+FEH_array.generate_inputs(assert_band=['F395'],
+                          assert_colors=['gSDSS_rSDSS'],
                           reject_colors=['F395_F410'])  #assert_band=["F395"]
 
+FEH_array.initialize_networks()
+
 FEH_array.train(iterations=2)
+
 FEH_array.eval_performance()
 FEH_array.write_network_performance()
 FEH_array.skim_networks(select=25)
-FEH_array.prediction(target, flag_thing = False)
+FEH_array.prediction(target, flag_invalid = True)
 #FEH_array.predict_all_networks(target)
 FEH_array.write_training_results()
 #FEH_array.training_plots()

@@ -22,7 +22,7 @@ def identify_outliers(frame, scale):
     ### with network predictions
     RESIDUAL = frame['NET_TEFF'] - frame['TEFF']
     outliers = frame[np.abs(RESIDUAL) > scale*MAD(RESIDUAL)]
-    print(len(outliers), " identified in input set")
+    print('\t', len(outliers), " identified in input set")
     return outliers
 
 def iterative_fit(iterations=5):
@@ -66,7 +66,7 @@ class Network():
 
         self.ID = ID
 
-        self.network = network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
+        self.network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
                             solver=self.solver, tol=1e-9, max_iter=int(1e8), learning_rate="adaptive",
                             early_stopping=False,  random_state=200)
 
@@ -83,7 +83,7 @@ class Network():
         print("... training network")
         self.network.fit(self.training_set[self.inputs].values,
                          self.training_set[self.target_var].values)
-        print("... complete")
+        print("\tcomplete")
 
         self.verification_set.loc[:,"NET_" + self.target_var] = self.network.predict(self.verification_set[self.inputs].values)
         self.training_set.loc[:,"NET_" + self.target_var] = self.network.predict(self.training_set[self.inputs].values)
@@ -93,7 +93,7 @@ class Network():
     def train_on(self, training_input, ID=None):
         ### This is the function for self.training_set == None,
         ### intended for Network_Array.train_array()
-        print("Training on: " + str(ID), sep=" ", end = "\r", flush=True)
+        print("... Training on: " + str(ID), sep=" ", end = "\r", flush=True)
         #print(training_input.columns)
 
         self.network.fit(training_input[list(self.inputs)].values,
@@ -104,21 +104,6 @@ class Network():
         self.target_frame = input_frame
         print("... target frame set")
 
-
-    def is_interpolating_OLD(self, target_frame, interp_frame):
-        ### check if the inputs in the target frame are withing interp_frame Bounds
-        ### set flag
-        ### HUGE bottleneck
-        FLAG = []
-        length = len(target_frame)
-
-        for i, row in target_frame.iterrows():
-            FLAG.append(False not in [interp_frame[column].iloc[0] < row[column] < interp_frame[column].iloc[1] for column in self.inputs])
-
-            print("Percent completed:  " + '%.2f' % (float(i)/float(length)), sep= " ", end="\r", flush=True)
-
-        self.FLAG = np.array(FLAG, dtype=int)
-        return self.FLAG
 
     def is_interpolating(self, target_frame, interp_frame):
 
@@ -185,7 +170,7 @@ class Network():
         return self.low_mad
 
     def unscale_target_variable(self):
-        print("unscale_target_variable")
+        print("... unscale_target_variable")
         ## Precondition: Training must have been run to produce "NET" results
         self.verification_set.loc[:, "NET_"+self.target_var] = train_fns.unscale(self.verification_set.loc[:, "NET_"+self.target_var],
                                                                                             self.scale_frame[self.target_var].iloc[0],
@@ -210,12 +195,12 @@ class Network():
     def assess_performance(self):
         ### Compute relavent statistics of the network performance
         ### I'll probably modify this function a lot
-        print("assess_performance()")
+        print("... assess_performance()")
         self.training_residual = self.training_set["NET_"+self.target_var] - self.training_set[self.target_var]
         self.verification_residual = self.verification_set["NET_"+self.target_var] - self.verification_set[self.target_var]
 
-        print("Training Residual:     ", train_fns.gaussian_sigma(self.training_residual)[0])
-        print("Verification Residual: ", train_fns.gaussian_sigma(self.verification_residual)[0])
+        print("\tTraining Residual:     ", train_fns.gaussian_sigma(self.training_residual)[0])
+        print("\tVerification Residual: ", train_fns.gaussian_sigma(self.verification_residual)[0])
 
 
     def write_estimates(self, output_dir):
@@ -228,7 +213,7 @@ class Network():
 
 
     def save(self, location):
-        print("Finish")
+        print("... saving")
         intercept_out = open(location + self.target_var + "_net_intercepts.pkl", "wb")
         coefs_out =     open(location + self.target_var + "_net_coefs.pkl", "wb")
 
