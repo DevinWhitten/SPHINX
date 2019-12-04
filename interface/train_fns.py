@@ -557,7 +557,7 @@ class Dataset():
         print("... Processing ", self.variable, " training set")
         #self.remove_discrepant_variables(threshold)
         self.SNR_threshold(SNR_limit)
-        #self.EBV_threshold(self.params['EBV_MAX']) if EBV_limit==None else self.EBV_threshold(EBV_limit)
+        self.EBV_threshold(self.params['EBV_MAX']) if EBV_limit==None else self.EBV_threshold(EBV_limit)
         #if self.mode != "SEGUE":
         #    self.synth_native_reject(0.3)
 

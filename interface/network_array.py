@@ -44,7 +44,7 @@ class Network_Array():
 
     def __init__(self, training_set, target_variable,
                  interp_frame, scale_frame,
-                 param_file, input_type="both"):
+                 param_file, input_type="colors"):
 
 
         self.params = param_file.params
@@ -58,6 +58,7 @@ class Network_Array():
         ########################################################################
         self.array_size   = self.params['array_size']
         self.input_number = self.params['input_number']
+        self.hidden_layers = self.params['hidden_layers']
         self.solver       = self.params['solver']
         self.input_type   = input_type
 
@@ -162,7 +163,7 @@ class Network_Array():
 
 
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation,
-                                                    hidden_layer=6, solver = self.solver, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
+                                                    hidden_layer=self.hidden_layers, solver = self.solver, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
 
         return
 
@@ -245,7 +246,7 @@ class Network_Array():
 
         ### This should take into account the low residual in the event that variable == FEH
         print("... eval_performance()")
-        print("\ttarget variable: ", self.target_var)
+        print("\t target variable: ", self.target_var)
 
         [net.compute_residual(verify_set = self.verification_set, scale_frame = self.scale_frame) for net in self.network_array]
 
@@ -253,22 +254,25 @@ class Network_Array():
         [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
 
         if self.target_var == 'FEH':
-            print("FEH:  setting low_mad in network score")
+            print("\t FEH:  setting low_mad in network score")
             [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
             total_mad = np.array([net.get_mad() for net in self.network_array]) + 2.*np.array([net.get_low_mad() for net in self.network_array])
 
         elif self.target_var == "TEFF":
-            print("TEFF:  setting mad to network score")
+            print("\t TEFF:  setting mad to network score")
             total_mad = np.array([net.get_mad() for net in self.network_array])
 
         elif self.target_var == 'CFE':
             total_mad = np.array([net.get_mad() for net in self.network_array])
 
+        elif self.target_var == 'AC':
+            total_mad = np.array([net.get_mad() for net in self.network_array])
+
         else:
-            print("\teval_performance() can't handle:  ", self.target_var)
+            print("\t eval_performance() can't handle:  ", self.target_var)
 
 
-        print("\tSetting network mad")
+        print("\t Setting network mad")
 
         self.scores = np.divide(1., np.power(total_mad,3))
 
@@ -297,23 +301,20 @@ class Network_Array():
         print("... write_network_performance()")
         if filename == None: filename = "network_combination_residuals.pkl"
 
-        if self.target_var == "TEFF":
-            print("\twriting network input residuals to cache/", filename)
-
-            network_residual = {"combination": [net.inputs for net in self.network_array],
-                                "residual":  [net.get_mad() for net in self.network_array],
-                                "score": self.scores}
-
-        elif self.target_var:
+        if self.target_var == "FEH":
+            print("\t writing network input residuals to cache/", filename)
             network_residual = {"combination": [net.inputs for net in self.network_array],
                                 "residual": [net.get_mad() for net in self.network_array] ,
                                 "low_residual": [net.get_low_mad() for net in self.network_array],
                                 "score": self.scores}
 
         else:
-            print("\tCan't handle ", self.target_var, " in write_network_performance")
+            network_residual = {"combination": [net.inputs for net in self.network_array],
+                                "residual":  [net.get_mad() for net in self.network_array],
+                                "score": self.scores}
 
-        print("\twriting")
+
+        print("\t writing")
         #pd.DataFrame(network_residual).to_csv("cache/" + filename, index=False)
         file_out = open("cache/"+filename, "wb")
         pkl.dump(network_residual, file_out)
@@ -384,7 +385,7 @@ class Network_Array():
         ### Just run prediction on the verification and testing sets
         print("... write_training_results()")
         output = np.matrix([train_fns.unscale(net.predict(self.training_set), *self.scale_frame[self.target_var]) for net in self.network_array]).T
-        print('\t', output)
+        print('\t ', output)
         self.training_set.loc[:, 'NET_' + self.target_var] = (np.dot(output, self.scores)/self.scores.sum()).T
         self.training_set.loc[:, self.target_var] = train_fns.unscale(self.training_set[self.target_var], *self.scale_frame[self.target_var])
 
@@ -393,12 +394,12 @@ class Network_Array():
         self.verification_set.loc[:, self.target_var] = train_fns.unscale(self.verification_set[self.target_var], *self.scale_frame[self.target_var])
 
 
-        print("\twriting training/verification outputs")
+        print("\t writing training/verification outputs")
 
         self.training_set.to_csv(self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
         self.verification_set.to_csv(self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
 
-        print("\tdone.")
+        print("\t done.")
 
         return
 

@@ -14,6 +14,8 @@ from io_functions import span_window
 import stat_functions
 import itertools
 from scipy.optimize import curve_fit, minimize
+from scipy import integrate
+from statsmodels.nonparametric.kde import KDEUnivariate
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import pickle as pkl
@@ -27,7 +29,7 @@ plt.ion()
 class Dataset():
 
     def __init__(self, path, variable, params,
-                 mode="SEGUE", scale_frame=pd.DataFrame(), interp_frame=pd.DataFrame()):
+                 mode="TRAINING", scale_frame=pd.DataFrame(), interp_frame=pd.DataFrame()):
 
         ### path should be set from the param file
         ### variable dictates the behavior of many member functions
@@ -58,8 +60,8 @@ class Dataset():
         self.set_error_bands()
 
     def set_error_bands(self):
-        if self.mode == 'SEGUE':
-            self.error_bands = self.params['segue_sigma']
+        if self.mode == 'TRAINING':
+            self.error_bands = self.params['training_sigma']
 
         elif self.mode == 'TARGET':
             self.error_bands = self.params['target_sigma']
@@ -84,12 +86,14 @@ class Dataset():
         span_window()
         print("...format_names()")
 
-        if self.mode == "SEGUE":
-            #df.rename(columns=dict(zip(old_names, new_names)), inplace=True)
+        if self.mode == "TRAINING":
+
             self.custom.rename(columns=dict(zip(self.params['segue_bands'], self.params['format_bands'])), inplace=True)
-            self.custom.rename(columns={"TEFF_ADOP": "TEFF", "TEFF_ADOP_ERR": "TEFF_ERR"}, inplace=True)
-            self.custom.rename(columns={"FEH_BIW": "FEH", "FEH_BIW_ERR":"FEH_ERR"}, inplace=True)
-            self.custom.rename(columns={"CFE_COR": "CFE", "CFE_COR_ERR": "CFE_ERR"}, inplace=True)
+            self.custom.rename(columns={"TEFF_FINAL": "TEFF", "TEFF_FINAL_ERR": "TEFF_ERR"}, inplace=True)
+            self.custom.rename(columns={"FEH_FINAL": "FEH", "FEH_FINAL_ERR":"FEH_ERR"}, inplace=True)
+            self.custom.rename(columns={"CFE_FINAL": "CFE", "CFE_FINAL_ERR": "CFE_ERR"}, inplace=True)
+            self.custom.rename(columns={"AC_FINAL": "AC", "AC_FINAL_ERR": "AC_ERR"}, inplace=True)
+
 
 
         elif self.mode == "TARGET": ### For use of Dataset with the target list
@@ -106,7 +110,7 @@ class Dataset():
         ### This will probably greatly improve training
         print("... SNR_threshold:  ", SNR_limit)
         original_length = len(self.custom)
-        self.custom = self.custom[self.custom['SNR'] > SNR_limit]
+        self.custom = self.custom[self.custom['SN'] > SNR_limit]
         print("\tStars removed:  ", original_length - len(self.custom))
 
     def EBV_threshold(self, EBV_limit):
@@ -147,6 +151,9 @@ class Dataset():
             elif self.variable == 'CFE':
                 self.custom = self.custom[self.custom['CFE_ERR'] < self.params['CFE_ERR_MAX']]
 
+            elif self.variable == 'AC':
+                self.custom = self.custom[self.custom['AC_ERR'] < self.params['AC_ERR_MAX']]
+
             else:
                 raise Exception("Could not find variable listed:  {}".format(self.variable))
 
@@ -158,13 +165,16 @@ class Dataset():
         if run == True:
 
             if self.variable == 'TEFF':
-                self.custom = self.custom[self.custom["TEFF"].between(self.params['TMIN'], self.params['TMAX'], inclusive=True)]
+                self.custom = self.custom[self.custom["TEFF"].between(self.params['TEFF_MIN'], self.params['TEFF_MAX'], inclusive=True)]
 
             elif self.variable == 'FEH':
                 self.custom = self.custom[self.custom["FEH"].between(self.params['FEH_MIN'], self.params['FEH_MAX'], inclusive=True)]
 
             elif self.variable == 'CFE':
                 self.custom = self.custom[self.custom["CFE"].between(self.params['CFE_MIN'], self.params['CFE_MAX'], inclusive=True)]
+
+            elif self.variable == 'AC':
+                self.custom = self.custom[self.custom["CFE"].between(self.params['AC_MIN'], self.params['AC_MAX'], inclusive=True)]
 
             else:
                 raise Exception("Could not find variable listed:  {}".format(self.variable))
@@ -181,14 +191,14 @@ class Dataset():
         return
 
 
-    def gen_scale_frame(self, method="gauss"):
+    def gen_scale_frame(self, method="norm"):
         ### method: "gauss", "median"
         ### "median" makes use of the fscale and (max - min)/2.0 for center
         ### "gauss" is what we're used to
 
         span_window()
-        print("...gen_scale_frame()")
-        print("method:  ", method)
+        print("... gen_scale_frame()")
+        print("\t method:  ", method)
         ### Generate scale_frame from input_frame and inputs
         calibration = pd.DataFrame()
 
@@ -196,10 +206,18 @@ class Dataset():
         input_frame = self.custom
 
         ########################################################################
-        if method == "gauss":
+        if method == "norm":
             for band in self.params['format_bands'] + self.colors:
-                popt, pcov = stat_functions.gaussian_sigma(input_frame[band])
-                calibration.loc[:, band] = [popt[1], popt[2]]
+                #popt, pcov = stat_functions.gaussian_sigma(input_frame[band])
+                median = np.median(input_frame[band])
+                smad = stat_functions.S_MAD(input_frame[band])
+                std  = np.std(input_frame[band])
+
+                if (smad/std > 1.25) or (smad/std < 0.75):
+                    print("\t warning: scale discrepancy in band:  ", band)
+
+                ### load the location and scale
+                calibration.loc[:, band] = [median, smad]
 
         elif method == "median":
             for band in self.params['format_bands'] + self.colors:
@@ -216,6 +234,51 @@ class Dataset():
 
     def set_scale_frame(self, input_frame):
         self.scale_frame = input_frame
+
+
+
+    def uniform_kde_sample(self):
+        ### updated uniform sample function to
+        ### homogenize the distribution of the training variable.
+        print("... uniform_kde_sample")
+        variable = self.variable
+
+        if variable == 'TEFF':
+            kde_width = 100
+        else:
+            kde_width = 0.1
+
+        ### Basics
+        var_min, var_max = self.params[variable + "_MIN"], self.params[variable + "_MAX"]
+
+        distro = np.array(self.custom[variable])
+
+        ### Handle boundary solution
+
+        lower = var_min - abs(distro - var_min)
+        upper = var_max + abs(distro - var_max)
+        merge = np.concatenate([lower, upper, distro])
+
+        ### KDE
+
+        KDE_MERGE = KDEUnivariate(merge)
+        KDE_MERGE.fit(bw = kde_width)
+
+        #### interp KDE_MERGE for computation speed
+        span = np.linspace(var_min, var_max, 100)
+        KDE_FUN = interp1d(span, KDE_MERGE.evaluate(span))
+
+        ### Rescale
+        full_c = len(distro) / integrate.quad(KDE_MERGE.evaluate, var_min, var_max)[0]
+        scale = np.percentile(KDE_MERGE.evaluate(span)*full_c, 5)
+
+        ### Accept-Reject sampling
+        sample = np.random.uniform(0, 1, len(distro)) * KDE_FUN(distro) * full_c
+        boo_array = sample < scale
+
+        self.custom = self.custom.iloc[boo_array].copy()
+
+        print("\t uniform sample size:  ", len(self.custom))
 
 
 
