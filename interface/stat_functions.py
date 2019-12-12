@@ -67,10 +67,3 @@ def linear_scale(input_vector, mean, scale):
 def unscale(input_vector, mean, scale):
     ### transforms input_vector to original scale
     return scale * input_vector + mean
-
-
-
-def kde_cross_validate(distribution):
-
-
-    return

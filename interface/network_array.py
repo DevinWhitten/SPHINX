@@ -17,8 +17,11 @@ import sys, itertools
 import pickle as pkl
 
 sys.path.append("interface")
-import train_fns, net_functions, io_functions
+import train_fns, net_functions, io_functions, stat_functions
 
+
+################################################################################
+## Unfortunately Necessary functions
 
 def isin(array, target_filter):
     ### Check array of colors and magnitudes and determine if filter is present
@@ -37,6 +40,9 @@ def isnotin(array, target_filter):
 
     return True
 
+################################################################################
+## Main Network_Array class
+
 class Network_Array():
     ### The goal here is to generate an array of networks corresponding to the
     ### combinations of possible network inputs, enables averaging,
@@ -44,23 +50,26 @@ class Network_Array():
 
     def __init__(self, training_set, target_variable,
                  interp_frame, scale_frame,
-                 param_file, input_type="colors"):
+                 params, input_type="colors"):
 
 
-        self.params = param_file.params
+        self.params       = params
         self.training_set = training_set
+
+        ### Forget these for now! They're now set by a member function.
         self.interp_frame = interp_frame
-        self.scale_frame = scale_frame
-        self.target_var = target_variable
+        self.scale_frame  = scale_frame
+
+        self.target_var   = target_variable
 
         ########################################################################
         ## Things that should be set by the param file
         ########################################################################
-        self.array_size   = self.params['array_size']
-        self.input_number = self.params['input_number']
+        self.array_size    = self.params['array_size']
+        self.input_number  = self.params['input_number']
         self.hidden_layers = self.params['hidden_layers']
-        self.solver       = self.params['solver']
-        self.input_type   = input_type
+        self.solver        = self.params['solver']
+        self.input_type    = input_type
 
 
 
@@ -117,14 +126,14 @@ class Network_Array():
 
         ### Assemble the network array according to self.combinations
         print("... Generating", self.target_var,"network array")
-        print("\tpre-assert band:  ", len(self.combinations))
+        print("\t pre-assert band:  ", len(self.combinations))
 
         if type(assert_band) != type(None):
             for band in assert_band:
                 print("... Asserting: ", band)
                 self.combinations = self.combinations[np.array([isin(ele, band) for ele in self.combinations])]
 
-        print("\tpre-assert band:  ", len(self.combinations))
+        print("\t pre-assert band:  ", len(self.combinations))
         if type(reject_band) != type(None):
 
             for band in reject_band:
@@ -132,7 +141,7 @@ class Network_Array():
                 self.combinations = self.combinations[np.array([isnotin(ele, band) for ele in self.combinations])]
 
 
-        print("\tpre-assert colors length:   ", len(self.combinations))
+        print("\t pre-assert colors length:   ", len(self.combinations))
         #return self.combinations
         if type(assert_colors) != type(None):
             for color in assert_colors:
@@ -157,18 +166,137 @@ class Network_Array():
 
     def initialize_networks(self):
         ### just initializes the Network classes for each ANN subunit in the array
+        io_functions.span_window()
+        print("... initializing network array:  ", 'random!')
+        print("\t solver:  ", 'random!')
 
-        print("... initializing network array:  ", self.array_size)
-        print("\t... solver:  ", self.solver)
+        solvers = ['adam', 'lbfgs', 'sgd']
+        act_funcs = ['identity', 'logistic', 'tanh', 'relu']
+
+        #if type(self.hidden_layers) == int:
 
 
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation,
-                                                    hidden_layer=self.hidden_layers, solver = self.solver, ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
+                                                    hidden_layer=train_fns.random_layer(self.hidden_layers),
+                                                    act_fct = act_funcs[np.random.randint(0, len(act_funcs))],
+                                                    solver =  solvers[np.random.randint(0, len(solvers))], ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
+
+
+        print("\t total networks: ", len(self.network_array))
+        return
+
+    def construct_scale_frame(self, input_frame = None):
+        ### These functions enable the input scaling process
+        ### to occur entirely in the network_array class, instead of dataset.Dataset
+        print('... construct_scale_frame()')
+        if input_frame == None:
+            print("\t setting input to scale frame")
+            input_frame = self.training_set.custom.copy()
+
+        scale_frame = pd.DataFrame()
+
+        for band in self.inputs:
+            #### set the stat values for every band
+            median = np.median(input_frame[band])
+            smad   = stat_functions.S_MAD(input_frame[band])
+            std    = np.std(input_frame[band])
+
+            if (smad/std > 1.25) or (smad/std < 0.75):
+                print("\t warning: scale discrepancy in band:  ", band)
+
+            scale_frame.loc[:, band] = [median, smad]
+
+
+        #### Now time for that variable
+        print("\t setting ", self.target_var, ' scale')
+        scale_frame.loc[:, self.target_var] = [np.median(input_frame[self.target_var]),
+                                             np.std(input_frame[self.target_var])]
+
+        print("\t setting scale_frame")
+        self.scale_frame = scale_frame
 
         return
 
 
-    def train(self, train_fct=0.65, iterations=3):
+
+    def construct_interp_frame(self, input_frame = None):
+        ### Create interpolation frame, likely based on the <training> set.
+        ### I will come back to this!!
+        ### wouldn't it be really cool if this used a convex hull?...
+        print('... construct_input_frame()')
+        if input_frame == None:
+            print("\t setting input to scale frame")
+            input_frame = self.training_set.custom.copy()
+
+        working = pd.DataFrame()
+
+        for band in self.inputs:
+            working.loc[:, band] = [np.percentile(input_frame[band + "_norm"], 1),
+                                    np.percentile(input_frame[band + "_norm"], 99)]
+
+        self.interp_frame = working
+
+        return
+
+    def normalize_dataset(self, input_set = None):
+        ### scale_frame needs to have been set
+
+
+        if input_set == None:
+            print("... normalizing network training set")
+            working = self.training_set.custom.copy()
+            mode = "TRAIN"
+
+        else:
+            print("... normalizing input_set")
+            working = input_set.copy()
+            mode = "SCALE"
+
+        ########################################################################
+
+        for band in self.inputs:
+            working.loc[:, band + '_norm'] = stat_functions.linear_scale(working[band],
+                                                                self.scale_frame[band].iloc[0],
+                                                                self.scale_frame[band].iloc[1])
+
+        ########################################################################
+
+        if mode == 'TRAIN':
+            self.training_set.custom = working
+
+        elif mode == "SCALE":
+            return working
+
+        return
+
+
+
+
+    def generate_train_valid(self, train_fct=0.65):
+        ### Just cuts the sample into training and validation sets
+        ### Careful with the construction of scale frame
+
+        ### This function changes the nature of self.training_set, just be careful..
+
+        print("... generating train/valid sets")
+
+
+        self.verification_set = self.training_set.custom.iloc[int(len(self.training_set.custom)*train_fct):].copy()
+        self.training_set = self.training_set.custom.iloc[0:int(len(self.training_set.custom)*train_fct)].copy()
+
+        if self.target_var == 'FEH':
+            print('Verification < -2.5 :  ', len(self.verification_set[stat_functions.unscale(self.verification_set['FEH'], *self.scale_frame['FEH']) < -2.5]))
+            print('Training     < -2.5 :  ', len(self.training_set[stat_functions.unscale(self.training_set['FEH'], *self.scale_frame['FEH']) < -2.5]))
+
+
+        print('Training   Size:   ', len(self.training_set))
+        print('Validation Size:   ', len(self.verification_set))
+
+
+        return
+
+
+    def train(self, iterations=3, pool=False):
         io_functions.span_window()
         print("... training network array")
 
@@ -176,19 +304,29 @@ class Network_Array():
         ### iterations: number of networks to train
         ### initializes the verification and training sets
 
+        if pool:
+            nodes = multiprocessing.cpu_count()
+            print("\t training on:   ", nodes, 'nodes...')
+            p=multiprocessing.Pool(nodes)
 
-        self.verification_set = self.training_set.custom.iloc[int(len(self.training_set.custom)*train_fct):].copy()
-        self.training_set = self.training_set.custom.iloc[0:int(len(self.training_set.custom)*train_fct)].copy()
 
 
         for i in range(iterations):
-            print("\titerating training procedure:  ", i)
+            print("\t iterating training procedure:  ", i)
 
 
+            if pool:
+                pool_obj = train_fns.train_pool(self.training_set, self.network_array)
+                self.trained_networks = p.map(pool_obj.train_network, [(net, ID) for net, ID in zip(self.network_array,
+                                                                        np.arange(0, len(self.network_array), 1)
+                                                                        )])
 
-            [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
+                self.network_array = self.trained_networks
 
 
+            else:
+                print("\t training sequentially")
+                [net.train_on(self.training_set, ID) for ID, net in enumerate(self.network_array)]
 
             ###### Adding the outlier rejection here
             ### no score information yet
@@ -211,24 +349,36 @@ class Network_Array():
 
             ### trim the training set
 
-            print("\ttrimming training set by residual")
+            print("\t trimming training set by residual")
             original = len(self.training_residual)
+            ### this is a problem, the outlier rejection is removing low metallicity stars in the training set.........
+            boo_array = np.ones(len(self.training_set), dtype=bool)
 
-            self.training_set = self.training_set[abs(self.training_residual) < np.percentile(abs(self.training_residual), 98)]
-            self.training_residual = self.training_residual[abs(self.training_residual) < np.percentile(abs(self.training_residual), 98)]
+            if self.target_var == 'FEH':
+                boo_array = list(stat_functions.unscale(self.training_set['FEH'], *self.scale_frame['FEH']) < -2.5)
+                print('cool')
 
-            print("\tStars removed:   ", original - len(self.training_set))
+            outlier = list(abs(self.training_residual) < np.percentile(abs(self.training_residual), 99))
+
+
+
+            self.training_set = self.training_set.loc[np.logical_or(boo_array, outlier)]
+            self.training_residual = self.training_residual.loc[np.logical_or(boo_array, outlier)]
+
+            print("\t Stars removed:   ", original - len(self.training_set))
 
         return
 
 
 
 
-    def train_pool(self, train_fct=0.70, iterations=50, core_fraction=0.5):
+    def train_pool(self, iterations=50, core_fraction=0.5):
+        #### DEPRECIATED
         ### Let's try to multiprocess the network_array training
         ### I'll come back to this
         print("... train_pool")
         core_number = int(core_fraction*multiprocessing.cpu_count())
+        print("\t training on ", core_number, ' cores')
         ### multiprocessing pool
         pool = multiprocessing.Pool(core_number)
         pool.map(self.train_on, enumerate(self.network_array))
@@ -237,7 +387,7 @@ class Network_Array():
     def info(self):
         print()
         for i in range(len(self.network_array)):
-            print("\tNet:  ", self.network_array[i].get_id(), self.network_array[i].get_inputs())
+            print("\t Net:  ", self.network_array[i].get_id(), self.network_array[i].get_inputs())
 
 
     def eval_performance(self):
@@ -251,12 +401,12 @@ class Network_Array():
         [net.compute_residual(verify_set = self.verification_set, scale_frame = self.scale_frame) for net in self.network_array]
 
 
-        [net.set_mad(train_fns.MAD(net.residual))     for net in self.network_array]
+        [net.set_mad(train_fns.MAD(net.residual)) for net in self.network_array]
 
         if self.target_var == 'FEH':
             print("\t FEH:  setting low_mad in network score")
             [net.set_low_mad(train_fns.MAD(net.low_residual)) for net in self.network_array]
-            total_mad = np.array([net.get_mad() for net in self.network_array]) + 2.*np.array([net.get_low_mad() for net in self.network_array])
+            total_mad = np.array([net.get_mad() + net.get_low_mad() + 3.*np.median(net.get_low_residual()) for net in self.network_array])
 
         elif self.target_var == "TEFF":
             print("\t TEFF:  setting mad to network score")
@@ -316,25 +466,27 @@ class Network_Array():
 
         print("\t writing")
         #pd.DataFrame(network_residual).to_csv("cache/" + filename, index=False)
-        file_out = open("cache/"+filename, "wb")
+        file_out = open(self.params['SPHINX_path'] + "cache/"+filename, "wb")
         pkl.dump(network_residual, file_out)
         file_out.close()
 
         return
 
-    def prediction(self, target_set, flag_invalid=True):
+    def predict(self, target_set, flag_invalid=True):
 
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
         ### might as well unscale here as well.
         ### Checks inputs against the interp_frame, sets flag variable in the target set
 
+        ### Here now we also must run scale_photometry
+        target_set = normalize_dataset(target_set)
 
         print("... running array prediction:  ")
 
         output = np.vstack([train_fns.unscale(net.predict(target_set.custom), *self.scale_frame[self.target_var]) for net in self.network_array]).T
 
-        print("\tflagging network extrapolations")
+        print("\t flagging network extrapolations")
         flag = np.vstack([net.is_interpolating(target_frame = target_set.custom, interp_frame = self.interp_frame) for net in self.network_array]).T
 
         self.output = output
@@ -352,13 +504,13 @@ class Network_Array():
         flagged_score_array[flagged_score_array == 0] = np.nan
 
         if flag_invalid:
-            print("\tmasking output matrix with network flags")
+            print("\t masking output matrix with network flags")
             self.target_est = np.divide(np.dot(output * flag, self.scores), flagged_score_array)
         else:
-            print("\tnot masking output matrix with network flags")
+            print("\t not masking output matrix with network flags")
             self.target_est = np.divide(np.dot(output, self.scores), self.scores.sum())
 
-        print("\tappending columns to target_set")
+        print("\t appending columns to target_set")
 
         ######### DONT NEED TO UNSCALE!!!!!!!!!
         target_set.custom.loc[:, "NET_" + self.target_var] = self.target_est # train_fns.unscale(self.target_est, *self.scale_frame[self.target_var])
@@ -367,7 +519,7 @@ class Network_Array():
         target_set.custom.loc[:, "NET_" + self.target_var + "_ERR"] = self.target_err
 
         target_set.custom.loc[:, "NET_ARRAY_"+self.target_var + "_FLAG"] = [row.sum() for row in self.flag]
-        print("\tcomplete")
+        print("\t complete")
 
         return self.target_est, self.target_err
 
@@ -383,6 +535,7 @@ class Network_Array():
 
     def write_training_results(self):
         ### Just run prediction on the verification and testing sets
+        ### THIS IS WHERE THE TRAINING and VERIFICATION variables ARE UNSCALED
         print("... write_training_results()")
         output = np.matrix([train_fns.unscale(net.predict(self.training_set), *self.scale_frame[self.target_var]) for net in self.network_array]).T
         print('\t ', output)
@@ -396,8 +549,8 @@ class Network_Array():
 
         print("\t writing training/verification outputs")
 
-        self.training_set.to_csv(self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
-        self.verification_set.to_csv(self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
+        self.training_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
+        self.verification_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
 
         print("\t done.")
 
@@ -408,7 +561,7 @@ class Network_Array():
         print("... Generating training plots")
         ### show the training results in one-to-one residual plots
         span = np.linspace(min(self.verification_set[self.target_var]), max(self.verification_set[self.target_var]), 30)
-        pp = PdfPages(self.params["output_directory"] + self.target_var + "_plot.pdf")
+        pp = PdfPages(self.params['SPHINX_path'] + self.params["output_directory"] + self.target_var + "_FINALplot.pdf")
 
         fig, ax = plt.subplots(2,1)
 
@@ -427,6 +580,9 @@ class Network_Array():
 
         ax[0].plot(span, span, linestyle="--", color="black", alpha=0.75)
         ax[1].plot(span, np.zeros(30), linestyle="--", color="black", alpha=0.75)
+
+        [label.axvline(self.params[self.target_var + "_MIN"]) for label in ax]
+        [label.axvline(self.params[self.target_var + "_MAX"]) for label in ax]
 
         ax[0].legend()
         pp.savefig()
@@ -447,13 +603,13 @@ class Network_Array():
     def save_state(self, file_name):
         ### For now I will try to simply save the network in a pickle file
         print("... saving network")
-        pkl.dump(open("net_pkl/" + file_name, 'wb'))
+        pkl.dump(self, open(self.params['SPHINX_path'] + "net_pkl/" + file_name + ".pkl", 'wb'), protocol=4)
 
 
         return
 
     def load_state(self, file_name):
         print("... loading:  ", file_name)
-        self = pkl.load(open("net_pkl/" + file_name, 'rb'))
+        self = pkl.load(open(self.params['SPHINX_path'] + "net_pkl/" + file_name, 'rb'))
 
         return

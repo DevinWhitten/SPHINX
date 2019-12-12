@@ -29,18 +29,19 @@ plt.ion()
 class Dataset():
 
     def __init__(self, path, variable, params,
-                 mode="TRAINING", scale_frame=pd.DataFrame(), interp_frame=pd.DataFrame()):
+                 mode="TRAINING", scale_frame=pd.DataFrame(),
+                 interp_frame=pd.DataFrame()):
 
         ### path should be set from the param file
         ### variable dictates the behavior of many member functions
-
+        self.params = params
         print("... Reading database:  ", path)
 
         try:
-            self.master = pd.read_csv(path)
+            self.master = pd.read_csv(params['SPHINX_path'] + path)
         except:
             print("... catalog was compressed.")
-            self.master = pd.read_csv(path, compression="gzip")
+            self.master = pd.read_csv(params['SPHINX_path'] + path, compression="gzip")
 
         # generate ID for postprocessing remerge
         self.master.loc[:, "SPHINX_ID"] = np.arange(0, len(self.master), 1)
@@ -53,11 +54,12 @@ class Dataset():
 
         self.scale_frame = scale_frame
         self.interp_frame = interp_frame
-        self.params = params
+
 
         self.colors = []
-
+        print("SETTING ERROR BANDS")
         self.set_error_bands()
+        return
 
     def set_error_bands(self):
         if self.mode == 'TRAINING':
@@ -88,7 +90,7 @@ class Dataset():
 
         if self.mode == "TRAINING":
 
-            self.custom.rename(columns=dict(zip(self.params['segue_bands'], self.params['format_bands'])), inplace=True)
+            self.custom.rename(columns=dict(zip(self.params['training_bands'], self.params['format_bands'])), inplace=True)
             self.custom.rename(columns={"TEFF_FINAL": "TEFF", "TEFF_FINAL_ERR": "TEFF_ERR"}, inplace=True)
             self.custom.rename(columns={"FEH_FINAL": "FEH", "FEH_FINAL_ERR":"FEH_ERR"}, inplace=True)
             self.custom.rename(columns={"CFE_FINAL": "CFE", "CFE_FINAL_ERR": "CFE_ERR"}, inplace=True)
@@ -99,7 +101,9 @@ class Dataset():
         elif self.mode == "TARGET": ### For use of Dataset with the target list
             print("Replacing:  ", self.params['target_bands'])
             print("With:       ", self.params['format_bands'])
-            self.custom.rename(columns=dict(zip(self.params['target_bands'], self.params['format_bands'])), inplace=True)
+            self.custom.rename(columns=dict(zip(self.params['target_bands'],
+                                                self.params['format_bands'])),
+                                                inplace=True)
 
         else:
             raise Exception("mode {} not yet implemented in format_names")
@@ -122,28 +126,29 @@ class Dataset():
 
     def faint_bright_limit(self):
         span_window()
-        print(".... faint_bright_limit:  ", self.params['mag_bright_lim'], self.params['mag_faint_lim'],)
+        print(".... faint_bright_limit:  ", self.params['mag_bright_lim'], "<-->", self.params['mag_faint_lim'],)
         #print("custom columns:     ", self.custom.columns)
         for band in self.params['format_bands']:
-            #print(self.custom)
+
             #print(self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)])
-            print("\tminimum in:", band, min(self.custom[band]))
+            #print("\tminimum in:", band, min(self.custom[band]))
             self.custom = self.custom[np.isfinite(self.custom[band])]
             self.custom = self.custom[self.custom[band].between(self.params['mag_bright_lim'], self.params['mag_faint_lim'],  inclusive=True)]
             print("\tCurrent length after:", band, len(self.custom))
 
-    def error_reject(self, training=False):
+    def error_reject(self, training=True):
         span_window()
-        print("...error_reject()")
+        print("... error_reject()")
         #### Reject observations above the input error threshold
-        print("\tRejection with max err:  ", self.params['mag_err_max'])
+        print("\t Rejection with max err:  ", self.params['mag_err_max'])
         original = len(self.custom)
         for band in self.error_bands:
             self.custom = self.custom[self.custom[band] < self.params['mag_err_max']]
 
         if training:
+            print('\t Rejecting on input variable:  ', self.variable)
             if self.variable == "TEFF":
-                self.custom = self.custom[self.custom['TEFF_ERR'] < self.params['T_ERR_MAX']]
+                self.custom = self.custom[self.custom['TEFF_ERR'] < self.params['TEFF_ERR_MAX']]
 
             elif self.variable == "FEH":
                 self.custom = self.custom[self.custom['FEH_ERR'] < self.params['FEH_ERR_MAX']]
@@ -157,27 +162,23 @@ class Dataset():
             else:
                 raise Exception("Could not find variable listed:  {}".format(self.variable))
 
-        print("\tRejected:   ", original - len(self.custom))
+        print("\t Rejected:   ", original - len(self.custom))
 
-    def set_variable_bounds(self, run=False):
+    def set_variable_bounds(self, run=False, soften=0.2):
         print("...set_variable_bounds()")
 
         if run == True:
+            var_range  = self.params[self.variable + "_MAX"] - self.params[self.variable + "_MIN"]
+            var_center = (self.params[self.variable + "_MAX"] + self.params[self.variable + "_MIN"]) * 0.5
+            left  = var_center - (0.5 * var_range * (1 + soften))
+            right = var_center + (0.5 * var_range * (1 + soften))
 
-            if self.variable == 'TEFF':
-                self.custom = self.custom[self.custom["TEFF"].between(self.params['TEFF_MIN'], self.params['TEFF_MAX'], inclusive=True)]
+            print('\t softening variable:  ', self.variable, left, right)
 
-            elif self.variable == 'FEH':
-                self.custom = self.custom[self.custom["FEH"].between(self.params['FEH_MIN'], self.params['FEH_MAX'], inclusive=True)]
+            self.custom = self.custom[self.custom[self.variable].between(left,
+                                                                         right, inclusive=True)]
 
-            elif self.variable == 'CFE':
-                self.custom = self.custom[self.custom["CFE"].between(self.params['CFE_MIN'], self.params['CFE_MAX'], inclusive=True)]
 
-            elif self.variable == 'AC':
-                self.custom = self.custom[self.custom["CFE"].between(self.params['AC_MIN'], self.params['AC_MAX'], inclusive=True)]
-
-            else:
-                raise Exception("Could not find variable listed:  {}".format(self.variable))
 
 
     def build_colors(self):
@@ -237,7 +238,7 @@ class Dataset():
 
 
 
-    def uniform_kde_sample(self):
+    def uniform_kde_sample(self, cut=True):
         ### updated uniform sample function to
         ### homogenize the distribution of the training variable.
         print("... uniform_kde_sample")
@@ -246,10 +247,10 @@ class Dataset():
         if variable == 'TEFF':
             kde_width = 100
         else:
-            kde_width = 0.1
+            kde_width = 0.15
 
         ### Basics
-        var_min, var_max = self.params[variable + "_MIN"], self.params[variable + "_MAX"]
+        var_min, var_max = min(self.custom[variable]), max(self.custom[variable])
 
         distro = np.array(self.custom[variable])
 
@@ -270,16 +271,65 @@ class Dataset():
 
         ### Rescale
         full_c = len(distro) / integrate.quad(KDE_MERGE.evaluate, var_min, var_max)[0]
-        scale = np.percentile(KDE_MERGE.evaluate(span)*full_c, 5)
+
+        ### respan, because I don't want to be penalized for low counts outide variable range
+        respan = np.linspace(self.params[self.variable + "_MIN"], self.params[self.variable + "_MAX"], 100)
+        scale = np.percentile(KDE_MERGE.evaluate(respan)*full_c, 7)
 
         ### Accept-Reject sampling
         sample = np.random.uniform(0, 1, len(distro)) * KDE_FUN(distro) * full_c
         boo_array = sample < scale
 
-        self.custom = self.custom.iloc[boo_array].copy()
+        if cut:
+            self.custom = self.custom.iloc[boo_array].copy()
+            self.custom = self.custom.iloc[np.random.permutation(len(self.custom))].copy()
 
-        print("\t uniform sample size:  ", len(self.custom))
+            print("\t uniform sample size:  ", len(self.custom))
 
+        else: #just return the uniform sample
+            print('\t returning KDE sample')
+
+            return self.custom.iloc[boo_array].copy()
+
+
+    def supplement_synthetic(self, iterations=2):
+        ### this is an important function, basically create mock observations by
+        ### sampling within the errors.
+        ### mainly to build up low metallicity stars
+
+
+        print('... supplementing with gaussian variates')
+        self.custom.loc[:, 'sampled'] = [False] * len(self.custom)
+        ### get that uniform sample, that's what we'll sample
+        sample = self.uniform_kde_sample(cut=False)
+
+        sample = sample.iloc[np.random.permutation(len(sample))].copy()
+
+        final = []
+        for i in range(iterations):
+            resample = sample.copy()
+            ## pretty crucial to ensure that the format_bands corresponds to error_bands
+
+            ### MAGNITUDE SAMPLING
+            for band, err in zip(self.params['format_bands'], self.error_bands):
+
+                resample.loc[:, band] = np.random.normal(resample.loc[:, band], resample.loc[:, err])
+
+            #### MAIN VARIABLE SAMPLING
+
+            resample.loc[:, self.variable] = np.random.normal(resample.loc[:, self.variable], resample.loc[:, self.variable + "_ERR"])
+
+            resample.loc[:, 'sampled'] = [True] * len(resample)
+
+            final.append(resample)
+
+
+        ### just dump it back into self.cusom?
+        final = pd.concat(final)
+        print("\t adding :", len(final), " synthetic stars")
+        self.custom = pd.concat([final, self.custom])
+
+        return
 
 
 
@@ -352,12 +402,14 @@ class Dataset():
         print("...scale_photometry()")
 
         #### Precondition: We need self.scale_frame to be set
-        ### performs scaling from inputs defined in params.format_bands
+        #### performs scaling from inputs defined in params.format_bands
 
         working = self.custom.copy(deep=True)  # I don't want to funk with the original frame
         for band in self.params['format_bands'] + self.colors:
 
-            working.loc[:, band] = stat_functions.linear_scale(working[band], self.scale_frame[band].iloc[0], self.scale_frame[band].iloc[1])
+            working.loc[:, band] = stat_functions.linear_scale(working[band],
+                                                               self.scale_frame[band].iloc[0],
+                                                               self.scale_frame[band].iloc[1])
 
         self.custom = working
 
@@ -444,4 +496,4 @@ class Dataset():
             filename = self.params['output_filename']
 
         print("... Saving training set to ", filename)
-        self.custom.to_csv(self.params["output_directory"] + filename, index=False)
+        self.custom.to_csv(self.params['SPHINX_path'] + self.params["output_directory"] + filename, index=False)

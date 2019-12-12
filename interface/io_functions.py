@@ -1,4 +1,7 @@
-import os
+import os, sys
+import pickle as pkl
+
+import numpy as np
 from pyfiglet import Figlet
 
 def span_window():
@@ -8,6 +11,11 @@ def span_window():
 def clear():
     os.system("clear")
     return
+
+def get_fortune():
+    gen = eval(open("files/fortune_file.dat",'r').read())
+
+    return np.random.choice(gen)
 
 
 def intro():
@@ -25,3 +33,12 @@ def intro():
     print("Copyright Creative Commons")
     print("Contact: dwhitten@nd.edu")
     span_window()
+
+
+
+
+## For loading trained networks
+def load_network_state(filename):
+    print("\t loading network state:  ", filename, '.pkl')
+    net = pkl.load(open("net_pkl/" + filename + ".pkl", 'rb'))
+    return net

@@ -70,6 +70,11 @@ class Network():
                             solver=self.solver, tol=1e-9, max_iter=int(1e8), learning_rate="adaptive",
                             early_stopping=False,  random_state=200)
 
+
+        ##### Unfortunately I need to reformat the inputs so that they only touch
+        ##### the currently normalized versions
+        self.inputs = [input + "_norm" for input in self.inputs]
+
     def train(self, train_fct=0.75):
         ### Precondition: network must have been instantiated
         ### train:
@@ -83,7 +88,7 @@ class Network():
         print("... training network")
         self.network.fit(self.training_set[self.inputs].values,
                          self.training_set[self.target_var].values)
-        print("\tcomplete")
+        print("\t complete")
 
         self.verification_set.loc[:,"NET_" + self.target_var] = self.network.predict(self.verification_set[self.inputs].values)
         self.training_set.loc[:,"NET_" + self.target_var] = self.network.predict(self.training_set[self.inputs].values)
@@ -169,6 +174,9 @@ class Network():
     def get_low_mad(self):
         return self.low_mad
 
+    def get_low_residual(self):
+        return self.low_residual
+
     def unscale_target_variable(self):
         print("... unscale_target_variable")
         ## Precondition: Training must have been run to produce "NET" results
@@ -184,7 +192,7 @@ class Network():
                                                                                             self.scale_frame[self.target_var].iloc[0],
                                                                                             self.scale_frame[self.target_var].iloc[1])
 
-        self.training_set.loc[:, self.target_var] = train_fns.unscale(self.training_set.loc[:, self.target_var],
+        self.training_set.loc[:, self.target_var]        = train_fns.unscale(self.training_set.loc[:, self.target_var],
                                                                                             self.scale_frame[self.target_var].iloc[0],
                                                                                             self.scale_frame[self.target_var].iloc[1])
 
