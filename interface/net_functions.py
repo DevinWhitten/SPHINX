@@ -67,8 +67,8 @@ class Network():
         self.ID = ID
 
         self.network = sknet.MLPRegressor(hidden_layer_sizes = hidden_layer, activation = act_fct,
-                            solver=self.solver, tol=1e-9, max_iter=int(1e8), learning_rate="adaptive",
-                            early_stopping=False,  random_state=200)
+                            solver=self.solver, tol=1e-9, max_iter=int(1e6), learning_rate="adaptive",
+                            early_stopping=True,  random_state=200)
 
 
         ##### Unfortunately I need to reformat the inputs so that they only touch
@@ -98,7 +98,7 @@ class Network():
     def train_on(self, training_input, ID=None):
         ### This is the function for self.training_set == None,
         ### intended for Network_Array.train_array()
-        print("... Training on: " + str(ID), sep=" ", end = "\r", flush=True)
+        print("... Training on: " + str(ID) + "\r\t solver: " + self.solver + "\r\t layers:  " + str(self.hidden_layer) + "\r\t act_fct:  " + self.act_fct, sep=" ")
         #print(training_input.columns)
 
         self.network.fit(training_input[list(self.inputs)].values,
@@ -145,8 +145,6 @@ class Network():
             #self.prediction_flag = input_frame[list(self.inputs)]
 
             return self.prediction
-
-
 
 
 

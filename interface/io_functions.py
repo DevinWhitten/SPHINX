@@ -1,6 +1,6 @@
 import os, sys
 import pickle as pkl
-
+import gzip
 import numpy as np
 from pyfiglet import Figlet
 
@@ -38,7 +38,7 @@ def intro():
 
 
 ## For loading trained networks
-def load_network_state(filename):
+def load_network_state(params, filename):
     print("\t loading network state:  ", filename, '.pkl')
-    net = pkl.load(open("net_pkl/" + filename + ".pkl", 'rb'))
+    net = pkl.load(gzip.open(params['SPHINX_path'] + "/net_pkl/" + filename + ".pkl.gz", 'rb'))
     return net

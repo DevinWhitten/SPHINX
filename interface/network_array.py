@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 #import param_IDR as param
 import sys, itertools
 import pickle as pkl
+import gzip
 
 sys.path.append("interface")
 import train_fns, net_functions, io_functions, stat_functions
@@ -116,9 +117,10 @@ class Network_Array():
 
         else:
             print("ERROR: Bad network input_type")
+            self.inputs = self.training_set.colors
 
         self.combinations = np.array(list(itertools.combinations(self.inputs, self.input_number)))
-        print("\t" + str(len(self.combinations)), " of given input type")
+        print("\t " + str(len(self.combinations)), " of given input type")
         return
 
     def generate_inputs(self, assert_band=None, reject_band=None,
@@ -149,10 +151,10 @@ class Network_Array():
                 self.combinations = self.combinations[np.array([color in combo for combo in self.combinations])]
 
 
-        print("\tpre-color rejection combinations:  ", len(self.combinations))
+        print("\t pre-color rejection combinations:  ", len(self.combinations))
 
         if type(reject_colors) != type(None):
-            print("\tRejecting the following colors:  ", reject_colors)
+            print("\t rejecting the following colors:  ", reject_colors)
             for color in reject_colors:
                 assert (True in [color in combo for combo in self.combinations]), color + " not in network combinations!"
                 self.combinations = self.combinations[np.array([color not in combo for combo in self.combinations])]
@@ -173,11 +175,8 @@ class Network_Array():
         solvers = ['adam', 'lbfgs', 'sgd']
         act_funcs = ['identity', 'logistic', 'tanh', 'relu']
 
-        #if type(self.hidden_layers) == int:
-
-
         self.network_array = [net_functions.Network(target_variable = self.target_var, inputs=current_permutation,
-                                                    hidden_layer=train_fns.random_layer(self.hidden_layers),
+                                                    hidden_layer= train_fns.random_layer(self.hidden_layers),
                                                     act_fct = act_funcs[np.random.randint(0, len(act_funcs))],
                                                     solver =  solvers[np.random.randint(0, len(solvers))], ID = ID) for ID, current_permutation in enumerate(self.combinations[0:self.array_size])]
 
@@ -189,6 +188,7 @@ class Network_Array():
         ### These functions enable the input scaling process
         ### to occur entirely in the network_array class, instead of dataset.Dataset
         print('... construct_scale_frame()')
+
         if input_frame == None:
             print("\t setting input to scale frame")
             input_frame = self.training_set.custom.copy()
@@ -210,7 +210,7 @@ class Network_Array():
         #### Now time for that variable
         print("\t setting ", self.target_var, ' scale')
         scale_frame.loc[:, self.target_var] = [np.median(input_frame[self.target_var]),
-                                             np.std(input_frame[self.target_var])]
+                                               np.std(input_frame[self.target_var])]
 
         print("\t setting scale_frame")
         self.scale_frame = scale_frame
@@ -231,7 +231,8 @@ class Network_Array():
         working = pd.DataFrame()
 
         for band in self.inputs:
-            working.loc[:, band] = [np.percentile(input_frame[band + "_norm"], 1),
+            print("\t ", band + "_norm")
+            working.loc[:, band + "_norm"] = [np.percentile(input_frame[band + "_norm"], 1),
                                     np.percentile(input_frame[band + "_norm"], 99)]
 
         self.interp_frame = working
@@ -242,14 +243,15 @@ class Network_Array():
         ### scale_frame needs to have been set
 
 
-        if input_set == None:
+        if input_set == None: ### Default is to assume a training set, pre-initialized
             print("... normalizing network training set")
             working = self.training_set.custom.copy()
             mode = "TRAIN"
 
-        else:
+        else:   ### otherwise the mode is set to SCALE and it's working on the input parameter set
             print("... normalizing input_set")
-            working = input_set.copy()
+            input_copy = input_set
+            working = input_set.custom.copy()
             mode = "SCALE"
 
         ########################################################################
@@ -262,12 +264,18 @@ class Network_Array():
         ########################################################################
 
         if mode == 'TRAIN':
+            print("\t scaling target_var:  ", self.target_var)
+            working.loc[:, self.target_var] = stat_functions.linear_scale(working[self.target_var],
+                                                                        self.scale_frame[self.target_var].iloc[0],
+                                                                        self.scale_frame[self.target_var].iloc[1])
             self.training_set.custom = working
+            return
 
         elif mode == "SCALE":
-            return working
+            input_copy.custom = working
+            return input_copy
 
-        return
+
 
 
 
@@ -472,7 +480,7 @@ class Network_Array():
 
         return
 
-    def predict(self, target_set, flag_invalid=True):
+    def predict(self, target_set, flag_invalid=False):
 
         ### use the 1/MADs determined in eval_performance to perform a weighted average estimate for the
         ### target input
@@ -480,7 +488,7 @@ class Network_Array():
         ### Checks inputs against the interp_frame, sets flag variable in the target set
 
         ### Here now we also must run scale_photometry
-        target_set = normalize_dataset(target_set)
+        target_set = self.normalize_dataset(target_set)
 
         print("... running array prediction:  ")
 
@@ -495,6 +503,7 @@ class Network_Array():
         nan_flag[nan_flag == 0] = np.nan
 
         ##### This is the line
+        print("\t producing MAD error estimates")
         self.target_err = np.array([train_fns.MAD_finite(np.array(row))/0.6745 for row in output*nan_flag])
         #self.target_err = np.array([train_fns.weighted_error(row, self.scores) for row in output*nan_flag])
 
@@ -603,7 +612,7 @@ class Network_Array():
     def save_state(self, file_name):
         ### For now I will try to simply save the network in a pickle file
         print("... saving network")
-        pkl.dump(self, open(self.params['SPHINX_path'] + "net_pkl/" + file_name + ".pkl", 'wb'), protocol=4)
+        pkl.dump(self, gzip.open(self.params['SPHINX_path'] + "net_pkl/" + file_name + ".pkl.gz", 'wb'), protocol=4)
 
 
         return

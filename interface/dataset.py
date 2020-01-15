@@ -441,6 +441,7 @@ class Dataset():
 
 
     def scale_variable(self, mean=None, std=None, variable=None, method="median"):
+        #### FOR TRAINING SETS ONLY
         span_window()
         print("...scale_variable()")
         if (mean == None) and (std==None):
@@ -470,21 +471,28 @@ class Dataset():
         return
 
 
-    def merge_master(self, array_size=0):
+    def merge_master(self, array_size=0, vars=None):
         ### Precondition: Network estimates are completed on self.custom,
         ### Postcondition: Merges the network estimates with self.master using SPHINX_ID
         #columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']
         #if which == "all"
         if array_size != 0:
-            print("merging final parameters")
+            print("\t merging final parameters")
             columns = ["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID'] + self.colors
             #columns = columns + ["NET_" + str(i) + "_" + self.variable for i in range(array_size)]
             #columns = columns + ["NET_" + str(i) + "_" + self.variable + "_FLAG" for i in range(array_size)]
             self.custom = pd.merge(self.master,self.custom[columns], on="SPHINX_ID")
+
+        elif vars != None:
+            columns = [["NET_" + variable, "NET_" + variable, "NET_ARRAY_" + variable + "_FLAG"] for variable in vars]
+            flat_list = [item for sublist in columns for item in sublist]
+
+            self.custom = pd.merge(self.master, self.custom[flat_list + ["SPHINX_ID"]], on="SPHINX_ID")
+
         else:
-            print("Sorry about the duplicate columns")
+            print("\t sorry about the duplicate columns")
             self.custom = pd.merge(self.master,self.custom, on="SPHINX_ID")
-        #[["NET_" + self.variable, "NET_"+ self.variable + "_ERR", "NET_ARRAY_" + self.variable + "_FLAG",'SPHINX_ID']]
+
 
 
 
