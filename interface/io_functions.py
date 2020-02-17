@@ -4,8 +4,8 @@ import gzip
 import numpy as np
 from pyfiglet import Figlet
 
-def span_window():
-    print("-" * os.get_terminal_size().columns)
+def span_window(input_char = ":"):
+    print(input_char * os.get_terminal_size().columns)
     return
 
 def clear():

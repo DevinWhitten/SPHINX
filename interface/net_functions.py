@@ -1,8 +1,9 @@
 ### Author: Devin Whitten
-### Date: 11/11/17
+### Date: Feb, 2020
 
 ### This script serves as the interface for all functions associated with the
 ### temperature network.
+
 import numpy as np
 import pandas as pd
 import pickle
@@ -98,7 +99,7 @@ class Network():
     def train_on(self, training_input, ID=None):
         ### This is the function for self.training_set == None,
         ### intended for Network_Array.train_array()
-        print("... Training on: " + str(ID) + "\r\t solver: " + self.solver + "\r\t layers:  " + str(self.hidden_layer) + "\r\t act_fct:  " + self.act_fct, sep=" ")
+        print("... Training on: " + str(ID) + "\n\t solver: " + self.solver + "\n\t layers:  " + str(self.hidden_layer) + "\n\t act_fct:  " + self.act_fct + "\n", sep=" ", end='\r')
         #print(training_input.columns)
 
         self.network.fit(training_input[list(self.inputs)].values,

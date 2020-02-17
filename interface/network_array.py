@@ -53,6 +53,7 @@ class Network_Array():
                  interp_frame, scale_frame,
                  params, input_type="colors"):
 
+        io_functions.span_window()
 
         self.params       = params
         self.training_set = training_set
@@ -351,7 +352,7 @@ class Network_Array():
             #self.verification_set.loc[:, self.target_var] = train_fns.unscale(self.verification_set[self.target_var], *self.scale_frame[self.target_var])
 
             ### compute residual
-
+            #### These are normalized residuals
             self.training_residual = self.training_set['NET_' + self.target_var] - self.training_set[self.target_var]
             self.verification_residual = self.verification_set['NET_' + self.target_var] - self.verification_set[self.target_var]
 
@@ -556,10 +557,13 @@ class Network_Array():
         self.verification_set.loc[:, self.target_var] = train_fns.unscale(self.verification_set[self.target_var], *self.scale_frame[self.target_var])
 
 
-        print("\t writing training/verification outputs")
 
-        self.training_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
-        self.verification_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
+        try:
+            print("\t trying to write training/verification outputs")
+            self.training_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_training_results.csv", index=False)
+            self.verification_set.to_csv(self.params['SPHINX_path'] + self.params['output_directory'] + self.target_var + "_array_verification_results.csv", index=False)
+        except:
+            print("\t writing failed.. :(")
 
         print("\t done.")
 

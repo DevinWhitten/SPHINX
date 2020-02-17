@@ -1,6 +1,6 @@
 #################################################################
 # Author: Devin D Whitten
-# Date:   October 3, 2018
+# Date:   Feb, 2020
 # This is the main driver of the [Fe/H] determinations with SPHINX
 
 # All specifications for running should be made in the input
@@ -16,7 +16,7 @@ import numpy as np
 import sys,os
 
 sys.path.append("../interface")
-import dataset, train_fns, net_functions, network_array, io_functions
+import dataset, train_fns, net_functions, network_array, io_functions, master_state
 
 ################################################################################
 io_functions.span_window()
@@ -24,7 +24,6 @@ io_functions.intro()
 ################################################################################
 
 params = eval(open("../params/param_SPLUS82.py", 'r').read())
-
 
 print("Target set:  ", params['target_path'])
 
@@ -38,10 +37,10 @@ target = dataset.Dataset(path = params['target_path'],
 ### Load networks
 ################################################################################
 io_functions.span_window()
-print("... loading networks")
-TEFF_NET = io_functions.load_network_state(params, "TEFF_NET")
-FEH_NET  = io_functions.load_network_state(params, "FEH_NET" )
-AC_NET   = io_functions.load_network_state(params, "AC_NET"  )
+print("... initializing master state")
+
+MASTER = master_state.Master_State(params = params)
+
 ################################################################################
 
 print("... formating target set")
@@ -53,39 +52,11 @@ target.build_colors()
 io_functions.span_window()
 print("... running networks")
 
-TEFF_NET.predict(target)
-AC_NET.predict(target)
-FEH_NET.predict(target)
+target = MASTER.predict(target)
 
-
-target.merge_master()
 target.save(params['output_filename'])
 
 
-
-
-
+print(" -- COMPLETE -- ")
 ################################################################################
-
-
-################################################################################
-#target.gen_scale_frame("self", method="gauss")
-
-#### Define training set
-
-#### target should be scaled differently for TEFF and FEH...
-
-#target.set_scale_frame('self')
-#target.scale_photometry()
-#target.get_input_stats(inputs="colors")
-
-
-
-#io_functions.span_window()
-
-################################################################################
-##### Network section
-################################################################################
-
-
 ################################################################################

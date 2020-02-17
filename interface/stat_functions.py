@@ -51,7 +51,7 @@ def gaussian_sigma(residuals, clip=5.0, bins=20, normed=True):
                                           np.mean(residuals) + clip*np.std(residuals),
                                           inclusive=True)]
 
-    HIST = np.histogram(working, bins=bins, normed=normed)
+    HIST = np.histogram(working, bins=bins, density=normed)
 
     ### get bin centers
     xbins = [0.5 * (HIST[1][i] + HIST[1][i+1]) for i in range(len(HIST[1])-1)]

@@ -27,8 +27,13 @@ def MAD(input_vector):
 def MAD_finite(input_vector):
     ### Special case of MAD where we need to remove np.nans from consideration
     ### intended especially for the is_interpolating() self.flag in network_array
+
     input_vector = input_vector[np.isfinite(input_vector)]
-    return np.median(np.abs(input_vector - np.median(input_vector)))
+    if len(input_vector) > 1.:
+        return np.median(np.abs(input_vector - np.median(input_vector)))
+
+    else:
+        return np.nan
 
 def weighted_error(input_vector, scores):
     ### Weight the error estimate by the individual network scores
