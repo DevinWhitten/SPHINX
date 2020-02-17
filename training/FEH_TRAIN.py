@@ -22,25 +22,31 @@ io_functions.intro()
 ### READ TRAINING SET
 params = eval(open("../params/param_FEH.py", 'r').read())
 
-TEFF_train = dataset.Dataset(path = params['segue_path'],
+FEH_train = dataset.Dataset(path = params['segue_path'],
                                variable='FEH',
                                params = params,
                                mode='TRAINING')
 
 
-TEFF_train.format_names()
-TEFF_train.SNR_threshold(25)
-TEFF_train.faint_bright_limit()
-TEFF_train.error_reject(training=True)
-TEFF_train.build_colors()
-TEFF_train.set_variable_bounds(run=True)
-TEFF_train.get_input_stats(inputs='colors')
+FEH_train.format_names()
+FEH_train.SNR_threshold(35)
+FEH_train.faint_bright_limit()
+FEH_train.error_reject(training=True)
+FEH_train.specify_variable_bounds('TEFF', bounds = [params['TEFF_MIN'], params['TEFF_MAX']])
+FEH_train.build_colors()
+
+#### Set the lowpass to true for FEH since we want all the low metallicity stars we can get!
+FEH_train.set_variable_bounds(run=True, lowpass=False)
+
+FEH_train.get_input_stats(inputs='colors')
 
 ### generate the important stuff
 
-TEFF_train.uniform_kde_sample()
+FEH_train.uniform_kde_sample(p_scale = 0.1)
+FEH_train.supplement_synthetic(iterations=1)
 
-TEFF_train.get_input_stats(inputs='colors')
+
+FEH_train.get_input_stats(inputs='colors')
 
 ### Initialize network
 
@@ -66,5 +72,5 @@ FEH_NET.eval_performance()
 FEH_NET.write_network_performance()
 FEH_NET.skim_networks(select=params['skim'])
 FEH_NET.write_training_results()
-FEH_NET.training_plots()
-FEH_NET.save_state("FEH_NET")
+#FEH_NET.training_plots()
+FEH_NET.save_state("FEH_NET_5500_7000_apo")

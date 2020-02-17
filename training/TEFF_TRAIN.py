@@ -42,6 +42,8 @@ TEFF_train.uniform_kde_sample()
 
 TEFF_train.get_input_stats(inputs='colors')
 
+
+
 ### Initialize network
 
 TEFF_NET = network_array.Network_Array(TEFF_train, target_variable = "TEFF",
@@ -61,11 +63,11 @@ TEFF_NET.construct_interp_frame()
 
 TEFF_NET.generate_train_valid()
 
-TEFF_NET.train(iterations=2, pool=True)
+TEFF_NET.train(iterations=2, pool=False)
 TEFF_NET.eval_performance()
 TEFF_NET.write_network_performance()
 TEFF_NET.skim_networks(select=params['skim'])
 TEFF_NET.write_training_results()
-TEFF_NET.training_plots()
+#TEFF_NET.training_plots()
 TEFF_NET.save_state("TEFF_NET")
 #FEH_array.prediction(target, flag_invalid = False)
